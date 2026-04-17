@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a3a6a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Liquidación Total</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0e1117;--surface:#161b26;--surface2:#1e2535;--border:#2a3347;
+    --gold:#c9a84c;--gold-dim:#8a6f32;--green:#3ecf8e;--green-dim:#1a6b48;
+    --purple:#a78bfa;--red:#e05c5c;--text:#e8ecf4;--muted:#7a8599;--label:#a8b2c8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;min-height:100vh;}
+
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+  .logo-mark{width:34px;height:34px;background:var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;color:#0e1117;flex-shrink:0;}
+  header h1{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;}
+  header h1 span{color:var(--gold);}
+
+  .tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:99;}
+  .tab{flex:1;padding:11px 4px;text-align:center;font-family:'Syne',sans-serif;font-weight:600;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+  .tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+  .tab.t-canje.active{color:var(--purple);border-bottom-color:var(--purple);}
+  .tab.t-pago.active{color:var(--green);border-bottom-color:var(--green);}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  .page{max-width:640px;margin:0 auto;padding:16px 14px 40px;}
+
+  .section{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+  .section-head{padding:11px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-weight:600;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px;}
+  .section-head .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0;}
+
+  .inputs-grid{padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .input-group{display:flex;flex-direction:column;gap:5px;}
+  .input-group.full{grid-column:1/-1;}
+  label{font-size:10px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;}
+  input[type=number],select{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;padding:9px 12px;width:100%;outline:none;transition:border-color .15s;-webkit-appearance:none;appearance:none;}
+  input[type=number]:focus,select:focus{border-color:var(--gold);}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a8599' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;cursor:pointer;}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border);}
+  .toggle-label{font-size:11px;color:var(--label);}
+  .toggle{position:relative;width:44px;height:24px;cursor:pointer;}
+  .toggle input{display:none;}
+  .toggle-track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .2s;}
+  .toggle input:checked~.toggle-track{background:var(--gold);}
+  .toggle-thumb{position:absolute;width:18px;height:18px;background:white;border-radius:50%;top:3px;left:3px;transition:left .2s;}
+  .toggle input:checked~.toggle-thumb{left:23px;}
+
+  .concepto-row{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid rgba(42,51,71,.5);}
+  .concepto-row:last-child{border-bottom:none;}
+  .concepto-label{font-size:11px;color:var(--label);width:86px;flex-shrink:0;}
+  .concepto-inputs{display:flex;gap:7px;flex:1;align-items:center;}
+  .concepto-inputs input{flex:1;min-width:0;font-size:13px;padding:8px 10px;}
+  .curr-btn{background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:5px 7px;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;}
+  .curr-btn.usd{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.1);}
+  .curr-btn.ars{border-color:var(--green);color:var(--green);background:rgba(62,207,142,.1);}
+
+  /* RESULTADO OPERACIÓN */
+  .op-result{border-radius:12px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border);}
+  .op-result-head{background:var(--surface2);padding:12px 16px;font-family:'Syne',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+  .op-cols{display:grid;grid-template-columns:1fr 1fr;}
+  .op-col{padding:16px;background:var(--surface);}
+  .op-col:first-child{border-right:1px solid var(--border);}
+  .op-col .col-head{font-family:'Syne',sans-serif;font-weight:700;font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+  .op-col.c .col-head{color:var(--purple);}
+  .op-col.p .col-head{color:var(--green);}
+  .op-col .kilos-big{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;line-height:1;margin-bottom:4px;}
+  .op-col.c .kilos-big{color:var(--purple);}
+  .op-col.p .kilos-big{color:var(--green);}
+  .op-col .tn{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  .op-col .mini{font-size:10px;color:var(--muted);line-height:1.8;}
+  .op-col .mini span{color:var(--label);}
+
+  .total-kilos-bar{background:linear-gradient(135deg,#1a1f35,#1e2340);border-top:1px solid var(--border);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;}
+  .total-kilos-bar .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+  .total-kilos-bar .val{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--gold);}
+
+  /* LIQUIDACIÓN ROWS */
+  .result-rows{padding:4px 0;}
+  .result-row{display:flex;align-items:baseline;justify-content:space-between;padding:8px 16px;gap:12px;border-bottom:1px solid rgba(42,51,71,.5);}
+  .result-row:last-child{border-bottom:none;}
+  .result-row .lbl{color:var(--label);font-size:11.5px;flex:1;line-height:1.4;}
+  .result-row .lbl small{display:block;color:var(--muted);font-size:10px;margin-top:1px;}
+  .result-row .val{font-size:13px;font-weight:500;color:var(--text);text-align:right;white-space:nowrap;flex-shrink:0;}
+  .result-row.subtotal{background:rgba(201,168,76,.06);}
+  .result-row.subtotal .lbl{color:var(--gold-dim);}
+  .result-row.subtotal .val{color:var(--gold);}
+  .result-row.deduct .val{color:var(--red);}
+  .result-row.deduct .val::before{content:'- ';opacity:.6;font-size:11px;}
+  .result-row.ret .val{color:var(--red);}
+  .result-row.ret .val::before{content:'- ';opacity:.6;font-size:11px;}
+  .result-row.total-ded .val,.result-row.total-ret .val{color:var(--red);font-weight:700;}
+
+  /* BIG TOTAL */
+  .big-total{background:linear-gradient(135deg,#1a2235,#1e2a3a);border:1px solid var(--gold-dim);border-radius:12px;padding:18px 20px;margin-bottom:12px;}
+  .big-total .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .big-total .row:last-child{margin-bottom:0;}
+  .big-total .row .lbl{font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;}
+  .big-total .row .amount{font-family:'Syne',sans-serif;font-weight:700;font-size:22px;color:var(--green);}
+  .big-total .row .usd{font-size:11px;color:var(--muted);}
+  .big-total .row.cbu{border-top:1px solid var(--border);padding-top:10px;margin-top:4px;}
+  .big-total .row.cbu .amount{font-size:14px;color:var(--muted);}
+  .big-total .row.importe .amount{font-size:26px;}
+
+  .plus-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+  .plus-result{padding:12px 16px;background:rgba(62,207,142,.07);}
+  .plus-result .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .plus-result .row:last-child{margin-bottom:0;}
+  .plus-result .row .lbl{font-size:11px;color:var(--muted);}
+  .plus-result .row .val{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--green);}
+
+  .mode-btn{flex:1;padding:9px;background:var(--bg);border:1px solid var(--border);color:var(--muted);font-family:'Syne',sans-serif;font-weight:600;font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.5px;}
+  .mode-btn:first-child{border-radius:8px 0 0 8px;}
+  .mode-btn:last-child{border-radius:0 8px 8px 0;border-left:none;}
+  .mode-btn.active{background:rgba(167,139,250,.12);border-color:var(--purple);color:var(--purple);}
+  .tag{font-size:9px;background:rgba(201,168,76,.15);color:var(--gold);border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:middle;letter-spacing:.5px;}
+  .analytics-title{font-family:'Syne',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+  .an-item{margin-bottom:10px;}
+  .an-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+  .an-label{font-size:10px;color:var(--muted);}
+  .an-nums{font-size:11px;font-weight:500;color:var(--label);}
+  .an-pct{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-left:8px;}
+  .an-bar-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .an-bar-fill{height:100%;border-radius:3px;transition:width .4s;}
+  .an-bar-fill.gastos{background:var(--red);}
+  .an-bar-fill.cobro{background:var(--green);}
+  .an-bar-fill.saldo{background:var(--purple);}
+  .liq-banner{padding:10px 16px;font-size:11px;font-family:'Syne',sans-serif;font-weight:600;letter-spacing:.5px;}
+  .liq-banner.canje{background:rgba(167,139,250,.08);color:var(--purple);border-bottom:1px solid rgba(167,139,250,.2);}
+  .liq-banner.pago{background:rgba(62,207,142,.08);color:var(--green);border-bottom:1px solid rgba(62,207,142,.2);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">LT</div>
+  <h1>Liquidación <span>Total</span></h1>
+</header>
+
+<div class="tabs">
+  <div class="tab active"    onclick="switchTab('op')">Operación</div>
+  <div class="tab t-canje"   onclick="switchTab('canje')">Canje</div>
+  <div class="tab t-pago"    onclick="switchTab('pago')">Pago</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 1 — OPERACIÓN
+══════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-op">
+<div class="page">
+
+  <div class="section">
+    <div class="section-head"><span class="dot"></span>Parámetros</div>
+    <div class="inputs-grid">
+      <div class="input-group"><label>TC ($/USD)</label><input type="number" id="tc" value="1400" step="1" inputmode="decimal"></div>
+      <div class="input-group"><label>Precio (USD/tn)</label><input type="number" id="precio" value="380" step="0.5" inputmode="decimal"></div>
+      <div class="input-group"><label>Factor (%)</label><input type="number" id="factor" value="100" step="0.5" inputmode="decimal"></div>
+      <div class="input-group"><label>Comisión (%)</label><input type="number" id="com" value="2" step="0.1" inputmode="decimal"></div>
+      <div class="input-group"><label>Plus (USD/tn)</label><input type="number" id="plus_usd" value="0" step="0.5" inputmode="decimal"></div>
+      <div class="input-group"><label>Plus ($/tn)</label><input type="number" id="plus_ars_input" value="0" step="1" inputmode="decimal"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">ROG activo <span class="tag">IVA split</span></span>
+      <label class="toggle"><input type="checkbox" id="rog" checked><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Gastos de entrega <small style="margin-left:4px;font-size:9px;color:var(--muted)">+ IVA 21%</small></div>
+    <div class="concepto-row">
+      <div class="concepto-label">Paritarias</div>
+      <div class="concepto-inputs">
+        <input type="number" id="g_paritarias" value="0" step="0.01" inputmode="decimal" placeholder="0">
+        <button class="curr-btn usd" id="g_paritarias_curr" data-curr="usd" onclick="toggleCurr('g_paritarias')">USD/tn</button>
+      </div>
+    </div>
+    <div class="concepto-row">
+      <div class="concepto-label">Secada</div>
+      <div class="concepto-inputs">
+        <input type="number" id="g_secada" value="0" step="0.01" inputmode="decimal" placeholder="0">
+        <button class="curr-btn usd" id="g_secada_curr" data-curr="usd" onclick="toggleCurr('g_secada')">USD/tn</button>
+      </div>
+    </div>
+    <div class="concepto-row">
+      <div class="concepto-label">Flete corto</div>
+      <div class="concepto-inputs">
+        <input type="number" id="g_flete_corto" value="0" step="1" inputmode="decimal" placeholder="0">
+        <button class="curr-btn usd" id="g_flete_corto_curr" data-curr="usd" onclick="toggleCurr('g_flete_corto')">USD/tn</button>
+      </div>
+    </div>
+    <div class="concepto-row">
+      <div class="concepto-label">Flete largo</div>
+      <div class="concepto-inputs">
+        <input type="number" id="g_flete_largo" value="0" step="1" inputmode="decimal" placeholder="0">
+        <button class="curr-btn usd" id="g_flete_largo_curr" data-curr="usd" onclick="toggleCurr('g_flete_largo')">USD/tn</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--red)"></span>Deuda de insumos <small style="margin-left:4px;font-size:9px;color:var(--muted)">ya incluye IVA</small></div>
+    <div class="inputs-grid">
+      <div class="input-group"><label>Deuda (u$s)</label><input type="number" id="deuda_usd" value="0" step="100" inputmode="decimal" placeholder="0"></div>
+      <div class="input-group"><label>Deuda ($)</label><input type="number" id="deuda_ars" value="0" step="1000" inputmode="decimal" placeholder="0"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Importe a cobrar <small style="margin-left:4px;font-size:9px;color:var(--muted)">liquidación en pago</small></div>
+    <div class="inputs-grid">
+      <div class="input-group"><label>Cobrar (u$s)</label><input type="number" id="cobrar_usd" value="0" step="100" inputmode="decimal" placeholder="0"></div>
+      <div class="input-group"><label>Cobrar ($)</label><input type="number" id="cobrar_ars" value="0" step="1000" inputmode="decimal" placeholder="0"></div>
+    </div>
+  </div>
+
+  <!-- MODO -->
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Modo de cálculo</div>
+    <div style="display:flex;gap:0;padding:12px 16px;">
+      <button class="mode-btn active" id="mode_importe" onclick="setModo('importe')">Por importe</button>
+      <button class="mode-btn" id="mode_kilos" onclick="setModo('kilos')">Por kilos</button>
+    </div>
+    <!-- campos visibles solo en modo kilos -->
+    <div id="kilos_inputs" style="display:none;border-top:1px solid var(--border)">
+      <div class="inputs-grid">
+        <div class="input-group full"><label>Total kilos (tn)</label><input type="number" id="k_total" value="0" step="0.1" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div style="display:flex;gap:0;padding:0 16px 14px;">
+        <button class="mode-btn active" id="dest_auto"  onclick="setDest('auto')">Auto</button>
+        <button class="mode-btn"        id="dest_canje" onclick="setDest('canje')">Todo canje</button>
+        <button class="mode-btn"        id="dest_pago"  onclick="setDest('pago')">Todo pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTADO -->
+  <div class="op-result">
+    <div class="op-result-head">Kilos necesarios</div>
+    <div class="op-cols">
+      <div class="op-col c">
+        <div class="col-head">Canje — cancelación</div>
+        <div class="kilos-big" id="kr_c_kilos">—</div>
+        <div class="tn">toneladas</div>
+        <div class="mini">
+          Gastos: <span id="kr_c_gastos">—</span><br>
+          Deuda: <span id="kr_c_deuda">—</span><br>
+          Total: <span id="kr_c_total">—</span><br>
+          Neto liq: <span id="kr_c_neto">—</span>
+        </div>
+      </div>
+      <div class="op-col p">
+        <div class="col-head">Pago — cobrar</div>
+        <div class="kilos-big" id="kr_p_kilos">—</div>
+        <div class="tn">toneladas</div>
+        <div class="mini">
+          A cobrar: <span id="kr_p_cobrar">—</span><br>
+          Neto liq: <span id="kr_p_neto">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="total-kilos-bar">
+      <span class="lbl">Total kilos</span>
+      <span class="val" id="kr_total_kilos">—</span>
+    </div>
+    <!-- ANALYTICS -->
+    <div id="kr_analytics" style="display:none;border-top:1px solid var(--border);padding:14px 16px;">
+      <div class="analytics-title" id="kr_analytics_title">—</div>
+      <div class="analytics-bars" id="kr_analytics_bars"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 2 — CANJE
+══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-canje">
+<div class="page">
+  <div class="liq-banner canje">Cancelación en canje</div>
+
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Importe</div>
+    <div class="result-rows">
+      <div class="result-row"><span class="lbl">Precio Venta</span><span class="val" id="c_precio_ars">-</span></div>
+      <div class="result-row"><span class="lbl">Kilos</span><span class="val" id="c_kilos">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Importe Bruto</span><span class="val" id="c_bruto">-</span></div>
+      <div class="result-row"><span class="lbl">IVA (10,5%)</span><span class="val" id="c_iva">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Total</span><span class="val" id="c_total">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Deducciones</div>
+    <div class="result-rows">
+      <div class="result-row deduct"><span class="lbl">Comisión (<span id="c_com_pct">2</span>%)<small id="c_com_det"></small></span><span class="val" id="c_com">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Imp. Sellos<small>10,5‰ Comisión+IVA</small></span><span class="val" id="c_sellos">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Derecho Reg./Gtos Entrega<small>6‰ del Bruto</small></span><span class="val" id="c_derecho">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Honorarios Cámara<small>$915 × kilos + IVA</small></span><span class="val" id="c_honorarios">-</span></div>
+      <div class="result-row total-ded"><span class="lbl">Total Deducciones</span><span class="val" id="c_total_ded">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Retenciones</div>
+    <div class="result-rows">
+      <div class="result-row ret"><span class="lbl">IVA Retención<small>Canje — exento</small></span><span class="val">$ 0,00</span></div>
+      <div class="result-row ret"><span class="lbl">IIBB<small>0,75% del Bruto</small></span><span class="val" id="c_iibb">-</span></div>
+      <div class="result-row ret"><span class="lbl">Ganancias<small>Canje — exento</small></span><span class="val">$ 0,00</span></div>
+      <div class="result-row total-ret"><span class="lbl">Total Retenciones</span><span class="val" id="c_total_ret">-</span></div>
+    </div>
+  </div>
+  <div class="big-total">
+    <div class="row"><span class="lbl">Total a pagar</span><div style="text-align:right"><div class="amount" id="c_total_pagar">-</div><div class="usd" id="c_total_pagar_usd">-</div></div></div>
+    <div class="row cbu" id="c_row_cbu" style="display:none"><span class="lbl">CBU ROG (2,5%)</span><div><div class="amount" id="c_cbu_rog">-</div></div></div>
+    <div class="row importe"><span class="lbl">IMPORTE A PAGAR</span><div style="text-align:right"><div class="amount" id="c_importe_pagar">-</div><div class="usd" id="c_importe_pagar_usd">-</div></div></div>
+  </div>
+  <div class="plus-card">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Plus</div>
+    <div class="plus-result">
+      <div class="row"><span class="lbl">Plus ARS</span><span class="val" id="c_plus_ars">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus $</span><span class="val" id="c_total_plus">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus u$s</span><span class="val" id="c_total_plus_usd">-</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 3 — PAGO
+══════════════════════════════════════════ -->
+<div class="tab-content" id="tab-pago">
+<div class="page">
+  <div class="liq-banner pago">Cobro en pago</div>
+
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Importe</div>
+    <div class="result-rows">
+      <div class="result-row"><span class="lbl">Precio Venta</span><span class="val" id="p_precio_ars">-</span></div>
+      <div class="result-row"><span class="lbl">Kilos</span><span class="val" id="p_kilos">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Importe Bruto</span><span class="val" id="p_bruto">-</span></div>
+      <div class="result-row"><span class="lbl">IVA (10,5%)</span><span class="val" id="p_iva">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Total</span><span class="val" id="p_total">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Deducciones</div>
+    <div class="result-rows">
+      <div class="result-row deduct"><span class="lbl">Comisión (<span id="p_com_pct">2</span>%)<small id="p_com_det"></small></span><span class="val" id="p_com">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Imp. Sellos<small>10,5‰ Comisión+IVA</small></span><span class="val" id="p_sellos">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Derecho Reg./Gtos Entrega<small>6‰ del Bruto</small></span><span class="val" id="p_derecho">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Honorarios Cámara<small>$915 × kilos + IVA</small></span><span class="val" id="p_honorarios">-</span></div>
+      <div class="result-row total-ded"><span class="lbl">Total Deducciones</span><span class="val" id="p_total_ded">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Retenciones</div>
+    <div class="result-rows">
+      <div class="result-row ret"><span class="lbl">IVA Retención<small id="p_iva_lbl">5% Bruto–Com (ROG)</small></span><span class="val" id="p_ret_iva">-</span></div>
+      <div class="result-row ret"><span class="lbl">IIBB<small>0,75% del Bruto</small></span><span class="val" id="p_iibb">-</span></div>
+      <div class="result-row ret"><span class="lbl">Ganancias<small id="p_gan_lbl">2% Bruto–Com–MNI</small></span><span class="val" id="p_ganancias">-</span></div>
+      <div class="result-row total-ret"><span class="lbl">Total Retenciones</span><span class="val" id="p_total_ret">-</span></div>
+    </div>
+  </div>
+  <div class="big-total">
+    <div class="row"><span class="lbl">Total a pagar</span><div style="text-align:right"><div class="amount" id="p_total_pagar">-</div><div class="usd" id="p_total_pagar_usd">-</div></div></div>
+    <div class="row cbu" id="p_row_cbu" style="display:none"><span class="lbl">CBU ROG (2,5%)</span><div><div class="amount" id="p_cbu_rog">-</div></div></div>
+    <div class="row importe"><span class="lbl">IMPORTE A PAGAR</span><div style="text-align:right"><div class="amount" id="p_importe_pagar">-</div><div class="usd" id="p_importe_pagar_usd">-</div></div></div>
+  </div>
+  <div class="plus-card">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Plus</div>
+    <div class="plus-result">
+      <div class="row"><span class="lbl">Plus ARS</span><span class="val" id="p_plus_ars">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus $</span><span class="val" id="p_total_plus">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus u$s</span><span class="val" id="p_total_plus_usd">-</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+  const MNI=100000;
+  function f(n,d=2){return n.toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d});}
+  function ars(n){return '$ '+f(n);}
+  function usd_(n){return 'u$s '+f(n);}
+  function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
+
+  function getP(){
+    return{
+      tc:    parseFloat(document.getElementById('tc').value)||0,
+      precio:parseFloat(document.getElementById('precio').value)||0,
+      factor:(parseFloat(document.getElementById('factor').value)||0)/100,
+      comPct:parseFloat(document.getElementById('com').value)||0,
+      rog:   document.getElementById('rog').checked
+    };
+  }
+
+  function liq(k,tipo,p){
+    const ec=tipo==='canje';
+    const bruto=k*p.precio*p.tc*p.factor;
+    const total=bruto*1.105;
+    const cb=bruto*(p.comPct/100),ct=cb*1.105;
+    const sel=ct*0.0105,der=bruto*0.006,hon=915*k*1.105;
+    const td=ct+sel+der+hon;
+    const ri=ec?0:p.rog?(bruto-ct)*0.05:(bruto-ct)*0.105;
+    const rib=bruto*0.0075;
+    const rg=ec?0:!p.rog?Math.max(0,(bruto-ct-MNI)*0.15):Math.max(0,(bruto-ct-MNI)*0.02);
+    const tr=ri+rib+rg;
+    const tp=total-td-tr-rib;
+    const cbu=p.rog?(bruto-ct)*0.025:0;
+    return{bruto,total,cb,ct,sel,der,hon,td,ri,rib,rg,tr,tp,cbu,imp:tp-cbu};
+  }
+
+  function gastosPorTn(){
+    const tc=parseFloat(document.getElementById('tc').value)||0;
+    let tot=0;
+    ['paritarias','secada','flete_corto','flete_largo'].forEach(c=>{
+      const v=parseFloat(document.getElementById('g_'+c).value)||0;
+      const cur=document.getElementById('g_'+c+'_curr').dataset.curr;
+      tot+=cur==='usd'?v*tc:v;
+    });
+    return tot;
+  }
+
+  function biseccion(targetARS,tipo,p,gpTn,plusUSD,plusARStn,deudaFija=0){
+    if(targetARS<=0&&gpTn<=0&&deudaFija<=0) return 0;
+    let lo=0,hi=1e9,k;
+    for(let i=0;i<80;i++){
+      k=(lo+hi)/2;
+      const r=liq(k,tipo,p);
+      const plus=plusARStn>0?k*plusARStn:k*plusUSD*p.tc;
+      const neto=r.tp+plus;
+      const costo=k*gpTn*1.21+deudaFija;
+      if(neto<costo) lo=k; else hi=k;
+    }
+    return k;
+  }
+
+  let modo = 'importe';
+  let dest = 'auto'; // auto | canje | pago
+
+  function setDest(d){
+    dest = d;
+    ['auto','canje','pago'].forEach(x=>
+      document.getElementById('dest_'+x).classList.toggle('active', x===d)
+    );
+    calcular();
+  }
+
+  function setModo(m){
+    modo = m;
+    document.getElementById('mode_importe').classList.toggle('active', m==='importe');
+    document.getElementById('mode_kilos').classList.toggle('active', m==='kilos');
+    document.getElementById('kilos_inputs').style.display = m==='kilos' ? '' : 'none';
+    // en modo kilos los campos de importe/deuda/cobrar son solo informativos
+    const opacidad = m==='kilos' ? '0.4' : '1';
+    ['deuda_usd','deuda_ars','cobrar_usd','cobrar_ars'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.closest('.section').style.opacity = opacidad;
+    });
+    calcular();
+  }
+
+  function toggleCurr(id){
+    const btn=document.getElementById(id+'_curr'),cur=btn.dataset.curr;
+    if(cur==='usd'){btn.dataset.curr='ars';btn.textContent='$/tn';btn.classList.replace('usd','ars');}
+    else{btn.dataset.curr='usd';btn.textContent='USD/tn';btn.classList.replace('ars','usd');}
+    calcular();
+  }
+
+  function renderLiq(pfx,k,tipo,p,plusUSD,plusARStn){
+    const r=liq(k,tipo,p);
+    const tc=p.tc;
+    const plusARS=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+    set(pfx+'_precio_ars',ars(p.precio*tc));
+    set(pfx+'_kilos',f(k,3)+' tn');
+    set(pfx+'_bruto',ars(r.bruto));
+    set(pfx+'_iva',ars(r.bruto*0.105));
+    set(pfx+'_total',ars(r.total));
+    document.getElementById(pfx+'_com_pct').textContent=p.comPct;
+    set(pfx+'_com_det',ars(r.cb)+' + IVA '+ars(r.cb*0.105));
+    set(pfx+'_com',ars(r.ct));
+    set(pfx+'_sellos',ars(r.sel));
+    set(pfx+'_derecho',ars(r.der));
+    set(pfx+'_honorarios',ars(r.hon));
+    set(pfx+'_total_ded',ars(r.td));
+    if(pfx==='p'){
+      set('p_ret_iva',ars(r.ri));
+      set('p_iva_lbl',p.rog?'5% Bruto–Com (ROG)':'10,5% Bruto–Com');
+      set('p_ganancias',ars(r.rg));
+      set('p_gan_lbl',!p.rog?'15% Bruto–Com–MNI':'2% Bruto–Com–MNI');
+    }
+    set(pfx+'_iibb',ars(r.rib));
+    set(pfx+'_total_ret',ars(r.tr));
+    set(pfx+'_total_pagar',ars(r.tp));
+    set(pfx+'_total_pagar_usd',usd_(r.tp/tc));
+    const rowCbu=document.getElementById(pfx+'_row_cbu');
+    if(rowCbu) rowCbu.style.display=p.rog?'':'none';
+    if(p.rog) set(pfx+'_cbu_rog',ars(r.cbu));
+    set(pfx+'_importe_pagar',ars(r.imp));
+    set(pfx+'_importe_pagar_usd',usd_(r.imp/tc));
+    set(pfx+'_plus_ars',ars(plusARS));
+    const tp2=r.tp+plusARS;
+    set(pfx+'_total_plus',ars(tp2));
+    set(pfx+'_total_plus_usd',usd_(tp2/tc));
+  }
+
+  function calcular(){
+    const p=getP();
+    const tc=p.tc;
+    const plusUSD=parseFloat(document.getElementById('plus_usd').value)||0;
+    const plusARStn=parseFloat(document.getElementById('plus_ars_input').value)||0;
+    const deudaARS=(parseFloat(document.getElementById('deuda_usd').value)||0)*tc
+                  +(parseFloat(document.getElementById('deuda_ars').value)||0);
+    const cobrarARS=(parseFloat(document.getElementById('cobrar_usd').value)||0)*tc
+                   +(parseFloat(document.getElementById('cobrar_ars').value)||0);
+    const gpTn=gastosPorTn();
+
+    let Kc, Kp;
+
+    if(modo === 'kilos'){
+      const Ktotal = parseFloat(document.getElementById('k_total').value)||0;
+      if(dest === 'canje'){
+        // todo canje
+        Kc = Ktotal; Kp = 0;
+      } else if(dest === 'pago'){
+        // todo pago, canje = 0
+        Kc = 0; Kp = Ktotal;
+      } else {
+        // auto: Kc cubre gastos de Ktotal + deuda, Kp = resto
+        let lo=0, hi=Ktotal, k;
+        for(let i=0;i<80;i++){
+          k=(lo+hi)/2;
+          const r=liq(k,'canje',p);
+          const plus=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+          if(r.tp+plus < Ktotal*gpTn*1.21+deudaARS) lo=k; else hi=k;
+        }
+        Kc = k; Kp = Math.max(0, Ktotal - Kc);
+      }
+    } else {
+      // modo por importe:
+      // 1) Kp: kilos para que neto_pago = cobrarARS
+      if(cobrarARS > 0){
+        let lo=0,hi=1e9,k;
+        for(let i=0;i<80;i++){
+          k=(lo+hi)/2;
+          const r=liq(k,'pago',p);
+          const plus=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+          if(r.tp+plus < cobrarARS) lo=k; else hi=k;
+        }
+        Kp=k;
+      } else { Kp=0; }
+      // 2) Kc: neto_canje cubre gastos de (Kc+Kp) + deuda
+      const gastosFijos = Kp * gpTn * 1.21 + deudaARS;
+      let lo=0,hi=1e9,k;
+      for(let i=0;i<80;i++){
+        k=(lo+hi)/2;
+        const r=liq(k,'canje',p);
+        const plus=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+        if(r.tp+plus < k*gpTn*1.21 + gastosFijos) lo=k; else hi=k;
+      }
+      Kc=k;
+    }
+
+    // actualizar título resultado
+    document.querySelector('.op-result-head').textContent =
+      modo==='kilos' ? 'Resultado por kilos' : 'Kilos necesarios';
+    const rc=liq(Kc,'canje',p);
+    const rp=liq(Kp,'pago',p);
+    const plusC=plusARStn>0?Kc*plusARStn:Kc*plusUSD*tc;
+    const plusP=plusARStn>0?Kp*plusARStn:Kp*plusUSD*tc;
+    const gastosCanjeKilos = Kc*gpTn*1.21;
+    const gastosPagoKilos  = Kp*gpTn*1.21;
+    const gastosTotal      = gastosCanjeKilos + gastosPagoKilos;
+
+    set('kr_c_kilos', f(Kc,3));
+    set('kr_c_gastos', ars(gastosTotal));
+    set('kr_c_deuda',  ars(deudaARS));
+    set('kr_c_total',  ars(gastosTotal + deudaARS));
+    set('kr_c_neto',   ars(rc.tp + plusC));
+    const mostrarPago = Kp > 0;
+    set('kr_p_kilos',  mostrarPago ? f(Kp,3) : '—');
+    set('kr_p_cobrar', mostrarPago ? ars(cobrarARS>0?cobrarARS:rp.tp+plusP) : '—');
+    set('kr_p_neto',   mostrarPago ? ars(rp.tp+plusP) : '—');
+    const total = Kc + (mostrarPago ? Kp : 0);
+    set('kr_total_kilos', f(total,3)+' tn');
+
+    // ── ANALYTICS ──
+    const totalKilos = Kc + Kp;
+    const brutoTotal = totalKilos * p.precio * p.tc * p.factor; // bruto de todos los kilos
+    const pct = (v) => brutoTotal > 0 ? (v/brutoTotal*100) : 0;
+    const pctStr = (v) => f(pct(v),1) + '%';
+    const anDiv = document.getElementById('kr_analytics');
+    const anBars = document.getElementById('kr_analytics_bars');
+
+    if(brutoTotal > 0){
+      anDiv.style.display = '';
+      let html = '';
+      const currentDest = modo==='kilos' ? dest : 'auto';
+      const netoC = rc.tp + plusC;
+      const netoP = rp.tp + plusP;
+      const gastosDeuda = gastosTotal + deudaARS;
+      const base = netoC + netoP;           // total que recibís de las dos liquidaciones
+      const loQueRecibis = base - gastosDeuda;
+      const difRet = (rp.tr + rp.rib) - (rc.rib * 2);
+      const pN = (v) => base>0 ? f(v/base*100,1)+'%' : '0%';
+
+      function barra(label, valor, color, nota=''){
+        const pct = base>0 ? Math.min(100,Math.abs(valor)/base*100) : 0;
+        return `<div class="an-item">
+          <div class="an-row">
+            <span class="an-label">${label}${nota?`<small style="color:var(--muted);display:block;margin-top:1px">${nota}</small>`:''}</span>
+            <span style="text-align:right;flex-shrink:0">
+              <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${color}">${pN(valor)}</span>
+              <small style="display:block;color:var(--muted);font-size:10px">${ars(valor)}</small>
+            </span>
+          </div>
+          <div class="an-bar-track" style="margin-top:5px"><div style="height:100%;width:${pct}%;background:${color};border-radius:3px"></div></div>
+        </div>`;
+      }
+
+      document.getElementById('kr_analytics_title').textContent = 'Sobre el total neto recibido';
+
+      // fila base siempre visible con el valor real
+      html += `<div class="an-item" style="background:rgba(42,51,71,.3);border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        <div class="an-row" style="margin:0">
+          <span class="an-label" style="color:var(--label);font-weight:600">Total neto recibido</span>
+          <span style="text-align:right">
+            <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text)">${ars(base)}</span>
+            ${netoC>0&&netoP>0?`<small style="display:block;color:var(--muted);font-size:10px">${ars(netoC)} + ${ars(netoP)}</small>`:''}
+          </span>
+        </div>
+      </div>`;
+      if(currentDest === 'auto' || modo === 'importe'){
+        html += barra('Gastos + deuda', gastosDeuda, 'var(--red)');
+        html += barra('Lo que recibís', loQueRecibis, loQueRecibis>=0?'var(--green)':'var(--red)');
+
+      } else if(currentDest === 'canje'){
+        const saldoCC = netoC - gastosDeuda;
+        html += barra('Gastos + deuda', gastosDeuda, 'var(--red)');
+        html += barra('Saldo cta. corriente', saldoCC, 'var(--purple)', 'no cobrable en efectivo');
+
+      } else if(currentDest === 'pago'){
+        const disponible = netoP - gastosDeuda;
+        html += barra('Gastos + deuda', gastosDeuda, 'var(--red)', 'sin beneficio canje');
+        html += barra('Lo que recibís', disponible, disponible>=0?'var(--green)':'var(--red)');
+      }
+
+      anBars.innerHTML = html;
+    } else {
+      anDiv.style.display = 'none';
+    }
+
+    // Tabs liq
+    renderLiq('c',Kc,'canje',p,plusUSD,plusARStn);
+    renderLiq('p',Kp,'pago',p,plusUSD,plusARStn);
+  }
+
+  function switchTab(name){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+    document.querySelector(`.tab[onclick="switchTab('${name}')"]`).classList.add('active');
+    document.getElementById('tab-'+name).classList.add('active');
+  }
+
+  document.querySelectorAll('input,select').forEach(el=>{
+    el.addEventListener('input',calcular);
+    el.addEventListener('change',calcular);
+  });
+
+  calcular();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW OK:', reg.scope))
+      .catch(err => console.log('SW error:', err));
+  });
+}
+</script>
+</body>
+</html>
