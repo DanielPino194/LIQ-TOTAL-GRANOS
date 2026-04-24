@@ -1,13 +1,13 @@
 {
-  "name": "Liquidación Total Granos",
-  "short_name": "Liq. Total",
-  "description": "Calculadora de liquidación total de granos",
-  "start_url": "/LIQ-TOTAL-GRANOS/index.html",
-  "scope": "/LIQ-TOTAL-GRANOS/",
+  "name": "Liquidación Total",
+  "short_name": "Liq Total",
+  "description": "Calculadora de liquidaciones agrícolas",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0e1117",
-  "theme_color": "#1a3a6a",
   "orientation": "portrait",
+  "background_color": "#004481",
+  "theme_color": "#004481",
   "icons": [
     {
       "src": "icon-192.png",
