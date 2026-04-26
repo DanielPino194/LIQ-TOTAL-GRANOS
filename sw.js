@@ -1,4 +1,4 @@
-const CACHE='liqtotal-v3';
+const CACHE='liqtotal-v4';
 self.addEventListener('install',e=>self.skipWaiting());
 self.addEventListener('activate',e=>{
   e.waitUntil(
