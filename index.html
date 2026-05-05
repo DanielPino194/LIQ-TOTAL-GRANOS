@@ -1,0 +1,2851 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liquidacion Total</title>
+<meta name="theme-color" content="#004481">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Liq Total">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="34" fill="%23004481"/><rect x="40" y="40" width="112" height="112" rx="24" fill="%232dcccd"/><text x="96" y="122" font-family="Arial,sans-serif" font-size="64" font-weight="800" fill="%23072146" text-anchor="middle">LT</text></svg>'>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f6f9;
+    --surface:#ffffff;
+    --surface2:#f8fafc;
+    --border:#e2e8f0;
+    --primary:#004481;
+    --primary-light:#1464A5;
+    --primary-dark:#072146;
+    --accent:#2dcccd;
+    --gold:#004481;
+    --gold-dim:#1464A5;
+    --green:#00a86b;
+    --green-dim:#007a4d;
+    --purple:#5e6472;
+    --red:#da3831;
+    --text:#121212;
+    --text-soft:#2a2a2a;
+    --muted:#7a8599;
+    --label:#4a5568;
+    --shadow:0 1px 3px rgba(0,68,129,0.06),0 1px 2px rgba(0,68,129,0.04);
+    --shadow-md:0 4px 12px rgba(0,68,129,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter','Helvetica Neue',Arial,sans-serif;font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased;}
+
+  header{background:var(--primary);padding:16px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow);}
+  .logo-mark{width:36px;height:36px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:var(--primary-dark);flex-shrink:0;letter-spacing:-.5px;}
+  header h1{font-weight:600;font-size:17px;color:white;letter-spacing:-.3px;}
+  header h1 span{color:var(--accent);font-weight:700;}
+
+  .tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:68px;z-index:99;padding:0 4px;overflow-x:auto;}
+  .tab{flex:1;min-width:72px;padding:14px 4px;text-align:center;font-weight:600;font-size:11px;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;}
+  .tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+  .tab.t-canje.active{color:var(--primary-light);border-bottom-color:var(--primary-light);}
+  .tab.t-pago.active{color:var(--green);border-bottom-color:var(--green);}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  .page{max-width:680px;margin:0 auto;padding:18px 16px 16px;}
+
+  .section{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow);}
+  .section-head{padding:13px 18px;background:var(--surface);border-bottom:1px solid var(--border);font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--primary);display:flex;align-items:center;gap:8px;}
+  .section-head .dot{width:6px;height:6px;border-radius:50%;background:var(--primary);flex-shrink:0;}
+
+  .inputs-grid{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .input-group{display:flex;flex-direction:column;gap:6px;}
+  .input-group.full{grid-column:1/-1;}
+  label{font-size:11px;color:var(--muted);letter-spacing:.3px;font-weight:500;}
+  input[type=number],input[type=text],select{background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:15px;font-weight:500;padding:11px 13px;width:100%;outline:none;transition:all .15s;-webkit-appearance:none;appearance:none;}
+  input[type=number]:focus,input[type=text]:focus,select:focus{border-color:var(--primary);background:white;box-shadow:0 0 0 3px rgba(0,68,129,.1);}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23004481' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px;cursor:pointer;}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--border);background:var(--surface2);}
+  .toggle-label{font-size:13px;color:var(--text-soft);font-weight:500;}
+  .toggle{position:relative;width:46px;height:26px;cursor:pointer;}
+  .toggle input{display:none;}
+  .toggle-track{position:absolute;inset:0;background:#cbd5e0;border-radius:13px;transition:background .2s;}
+  .toggle input:checked~.toggle-track{background:var(--primary);}
+  .toggle-thumb{position:absolute;width:20px;height:20px;background:white;border-radius:50%;top:3px;left:3px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.15);}
+  .toggle input:checked~.toggle-thumb{left:23px;}
+
+  .concepto-row{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);}
+  .concepto-row:last-child{border-bottom:none;}
+  .concepto-label{font-size:13px;color:var(--text-soft);font-weight:500;width:94px;flex-shrink:0;}
+  .concepto-inputs{display:flex;gap:8px;flex:1;align-items:center;}
+  .concepto-inputs input{flex:1;min-width:0;font-size:14px;padding:10px 12px;}
+
+  .gastos-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;padding:18px;}
+  .g-cell{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .g-cell label{font-size:11px;color:var(--muted);letter-spacing:.2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .g-inputs{display:flex;gap:6px;align-items:center;}
+  .g-inputs input{flex:1;min-width:0;font-size:14px;padding:10px 11px;}
+  .g-inputs .curr-btn{padding:8px 9px;font-size:11px;}
+  @media (max-width:520px){
+    .gastos-grid{grid-template-columns:1fr 1fr;gap:10px;padding:14px;}
+    .g-inputs input{font-size:13px;padding:9px 10px;}
+    .g-inputs .curr-btn{padding:7px 8px;font-size:10px;}
+    .g-cell label{font-size:10.5px;}
+  }
+  @media (max-width:380px){
+    .gastos-grid{gap:8px;padding:12px;}
+    .g-inputs input{font-size:12px;padding:8px 9px;}
+    .g-inputs .curr-btn{padding:6px 7px;font-size:9.5px;}
+    .g-cell label{font-size:9.5px;}
+  }
+  .curr-btn{background:white;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:inherit;font-size:11px;font-weight:600;padding:7px 10px;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;}
+  .curr-btn.active{border-color:var(--primary);color:var(--primary);background:rgba(0,68,129,.06);}
+  .curr-btn.active-green{border-color:var(--green);color:var(--green);background:rgba(0,168,107,.08);}
+
+  .mode-btn{flex:1;padding:11px;background:white;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-weight:600;font-size:12px;cursor:pointer;transition:all .15s;}
+  .mode-btn:first-child{border-radius:10px 0 0 10px;}
+  .mode-btn:last-child{border-radius:0 10px 10px 0;border-left:none;}
+  .mode-btn.active{background:rgba(0,68,129,.08);border-color:var(--primary);color:var(--primary);}
+
+  .op-result{border-radius:14px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border);background:white;box-shadow:var(--shadow);}
+  .op-result-head{background:var(--primary);color:white;padding:14px 18px;font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase;}
+  .op-cols{display:grid;grid-template-columns:1fr 1fr;}
+  .op-col{padding:18px 16px;}
+  .op-col:first-child{border-right:1px solid var(--border);}
+  .op-col .col-head{font-weight:700;font-size:10px;letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px;}
+  .op-col.c .col-head{color:var(--primary-light);}
+  .op-col.p .col-head{color:var(--green);}
+  .op-col .kilos-big{font-weight:800;font-size:28px;line-height:1;margin-bottom:3px;letter-spacing:-.5px;}
+  .op-col.c .kilos-big{color:var(--primary);}
+  .op-col.p .kilos-big{color:var(--green);}
+  .op-col .tn{font-size:11px;color:var(--muted);margin-bottom:12px;}
+  .op-col .mini{font-size:11px;color:var(--muted);line-height:1.9;}
+  .op-col .mini span{color:var(--text-soft);font-weight:500;}
+  .total-kilos-bar{background:var(--surface2);border-top:1px solid var(--border);padding:16px 18px;display:flex;justify-content:space-between;align-items:center;}
+  .total-kilos-bar .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:600;}
+  .total-kilos-bar .val{font-weight:800;font-size:22px;color:var(--primary);letter-spacing:-.3px;}
+
+  .an-item{margin-bottom:12px;}
+  .an-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+  .an-label{font-size:12px;color:var(--text-soft);}
+  .an-bar-track{height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+
+  .result-rows{padding:4px 0;}
+  .result-row{display:flex;align-items:baseline;justify-content:space-between;padding:10px 18px;gap:12px;border-bottom:1px solid var(--border);}
+  .result-row:last-child{border-bottom:none;}
+  .result-row .lbl{color:var(--text-soft);font-size:12px;flex:1;line-height:1.4;}
+  .result-row .lbl small{display:block;color:var(--muted);font-size:10px;margin-top:2px;}
+  .result-row .val{font-size:13px;font-weight:600;color:var(--text);text-align:right;white-space:nowrap;flex-shrink:0;}
+  .result-row.subtotal{background:var(--surface2);}
+  .result-row.subtotal .lbl{color:var(--primary);font-weight:600;}
+  .result-row.subtotal .val{color:var(--primary);font-weight:700;}
+  .result-row.deduct .val,.result-row.ret .val{color:var(--red);}
+  .result-row.deduct .val::before,.result-row.ret .val::before{content:'- ';opacity:.7;font-size:11px;}
+  .result-row.total-ded .val,.result-row.total-ret .val{color:var(--red);font-weight:700;}
+
+  .big-total{background:var(--primary);color:white;border-radius:14px;padding:20px 22px;margin-bottom:12px;box-shadow:var(--shadow-md);}
+  .big-total .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;}
+  .big-total .row:last-child{margin-bottom:0;}
+  .big-total .row .lbl{font-size:11px;color:rgba(255,255,255,.7);letter-spacing:.5px;text-transform:uppercase;font-weight:600;}
+  .big-total .row .amount{font-weight:700;font-size:22px;color:white;letter-spacing:-.3px;}
+  .big-total .row .usd{font-size:11px;color:rgba(255,255,255,.65);}
+  .big-total .row.cbu{border-top:1px solid rgba(255,255,255,.15);padding-top:12px;margin-top:4px;}
+  .big-total .row.cbu .amount{font-size:15px;color:rgba(255,255,255,.75);}
+  .big-total .row.importe .amount{font-size:28px;color:var(--accent);}
+
+  .plus-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow);}
+  .plus-result{padding:14px 18px;background:rgba(0,168,107,.05);}
+  .plus-result .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .plus-result .row:last-child{margin-bottom:0;}
+  .plus-result .row .lbl{font-size:12px;color:var(--text-soft);}
+  .plus-result .row .val{font-weight:700;font-size:15px;color:var(--green);}
+
+  .liq-banner{padding:12px 18px;font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;}
+  .liq-banner.canje{background:rgba(0,68,129,.08);color:var(--primary);border-bottom:1px solid rgba(0,68,129,.15);}
+  .liq-banner.pago{background:rgba(0,168,107,.08);color:var(--green);border-bottom:1px solid rgba(0,168,107,.15);}
+  .tag{font-size:9px;background:rgba(0,68,129,.1);color:var(--primary);border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:middle;letter-spacing:.3px;font-weight:600;text-transform:uppercase;}
+
+  /* RESUMEN — optimizado para pantalla */
+  .res-hero{background:linear-gradient(135deg,var(--primary) 0%,var(--primary-light) 100%);color:white;border-radius:16px;padding:18px 18px;margin-bottom:12px;box-shadow:var(--shadow-md);}
+  .res-hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}
+  .res-title{font-weight:700;font-size:15px;letter-spacing:-.2px;}
+  .res-date{font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;font-weight:500;}
+  .res-badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:4px 9px;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--accent);white-space:nowrap;}
+  .res-hero-kilos{display:flex;align-items:baseline;gap:6px;}
+  .res-hero-kilos .n{font-weight:800;font-size:32px;line-height:1;color:white;letter-spacing:-.8px;}
+  .res-hero-kilos .u{font-size:13px;color:rgba(255,255,255,.7);font-weight:500;}
+  .res-hero-sub{margin-top:3px;font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.5px;font-weight:500;}
+  .res-hero-split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.15);}
+  .rhs-col{background:rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.10);}
+  .rhs-canje{border-left:3px solid var(--accent);}
+  .rhs-pago{border-left:3px solid #4ade80;}
+  .rhs-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.7);margin-bottom:4px;}
+  .rhs-kilos{font-weight:800;font-size:18px;line-height:1;color:white;letter-spacing:-.4px;margin-bottom:8px;}
+  .rhs-line{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:10.5px;color:rgba(255,255,255,.7);gap:6px;}
+  .rhs-line b{color:white;font-weight:600;}
+  .rhs-total{margin-top:4px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:11px;}
+  .rhs-total b{font-size:12px;color:var(--accent);font-weight:800;}
+  .rhs-pago .rhs-total b{color:#4ade80;}
+
+  .res-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);}
+  .res-card-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px;}
+  .res-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12.5px;border-bottom:1px solid var(--border);gap:10px;}
+  .res-row:last-child{border-bottom:none;}
+  .res-row span{color:var(--text-soft);flex-shrink:1;}
+  .res-row b{color:var(--text);font-weight:600;text-align:right;white-space:nowrap;}
+  .res-row.res-sum{border-top:2px solid var(--primary);border-bottom:none;margin-top:4px;padding-top:9px;}
+  .res-row.res-sum span{color:var(--primary);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.3px;}
+  .res-row.res-sum b{color:var(--primary);font-size:14px;font-weight:700;}
+
+  .res-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+  .res-block{border-radius:14px;padding:13px 12px;color:white;box-shadow:var(--shadow);min-width:0;}
+  .res-block.res-canje{background:linear-gradient(145deg,var(--primary) 0%,var(--primary-light) 100%);}
+  .res-block.res-pago{background:linear-gradient(145deg,var(--green) 0%,#00c77e 100%);}
+  .res-block-title{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.6px;opacity:.9;margin-bottom:4px;}
+  .res-block-kilos{font-weight:800;font-size:20px;line-height:1;margin-bottom:10px;letter-spacing:-.3px;}
+  .res-block-line{display:flex;justify-content:space-between;font-size:10.5px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.15);gap:6px;}
+  .res-block-line:last-child{border-bottom:none;}
+  .res-block-line span{opacity:.85;flex-shrink:1;}
+  .res-block-line b{font-weight:700;white-space:nowrap;}
+  .res-block-line.res-total{border-top:1px solid rgba(255,255,255,.3);margin-top:4px;padding-top:6px;font-size:12px;font-weight:700;border-bottom:none;}
+
+  .res-final{background:var(--primary-dark);color:white;border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-md);}
+  .res-final-row{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,.08);gap:10px;}
+  .res-final-row:last-child{border-bottom:none;}
+  .res-final-row span{color:rgba(255,255,255,.7);font-weight:500;flex-shrink:1;}
+  .res-final-row b{font-weight:700;font-size:14px;color:white;letter-spacing:-.2px;white-space:nowrap;}
+  .res-final-red b{color:#ff6b6b;}
+  .res-final-green b{color:var(--accent);}
+  .res-final-big{padding-top:12px;margin-top:4px;border-top:2px solid rgba(45,204,205,.4);}
+  .res-final-big span{color:white;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.3px;}
+  .res-final-big b{font-size:22px;letter-spacing:-.4px;}
+  .home-page{max-width:680px;margin:0 auto;padding:14px 14px 32px;}
+
+
+  /* ───── VISOR PERMANENTE (estilo Kilos necesarios) ───── */
+  .visor-wrap{
+    background:var(--surface);border-bottom:1px solid var(--border);
+    padding:14px 14px 16px;position:sticky;top:62px;z-index:50;
+  }
+  .visor{
+    max-width:680px;margin:0 auto;
+    border:1px solid var(--border);border-radius:14px;
+    background:white;overflow:hidden;box-shadow:var(--shadow);
+  }
+  .visor-head{
+    background:var(--primary);color:white;padding:10px 16px;
+    font-weight:700;font-size:10px;letter-spacing:.6px;text-transform:uppercase;
+  }
+  .visor-cols{display:grid;grid-template-columns:1fr 1fr;}
+  .visor-col{padding:14px 14px;}
+  .visor-col.c{border-right:1px solid var(--border);}
+  .visor-col-head{
+    font-weight:700;font-size:9.5px;letter-spacing:.7px;text-transform:uppercase;
+    margin-bottom:8px;
+  }
+  .visor-col.c .visor-col-head{color:var(--primary-light);}
+  .visor-col.p .visor-col-head{color:var(--green);}
+  .visor-kilos{
+    font-weight:800;font-size:23px;line-height:1;letter-spacing:-.5px;margin-bottom:2px;
+  }
+  .visor-col.c .visor-kilos{color:var(--primary);}
+  .visor-col.p .visor-kilos{color:var(--green);}
+  .visor-tn{font-size:10.5px;color:var(--muted);margin-bottom:10px;}
+  .visor-mini{font-size:11px;color:var(--muted);line-height:1.7;}
+  .visor-mini span{color:var(--text-soft);font-weight:600;}
+  .visor-bar{background:var(--surface2);border-top:1px solid var(--border);padding:10px 16px;}
+  .visor-bar-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;}
+  .visor-bar-row.hr{border-top:1px solid var(--border);margin-top:6px;padding-top:8px;}
+  .visor-bar-row .vbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+  .visor-bar-row .vbv{font-weight:800;font-size:15px;color:var(--primary);letter-spacing:-.3px;}
+  .visor-bar-row .vbv-neg{color:var(--red);font-size:14px;}
+  .visor-bar-row .vbv-neg::before{content:'− ';opacity:.7;}
+  .visor-bar-row .vbv.acc{color:var(--primary-dark);background:var(--accent);padding:3px 10px;border-radius:8px;font-size:14px;}
+  @media (max-width:420px){
+    .visor-wrap{padding:10px 10px 12px;top:58px;}
+    .visor-kilos{font-size:20px;}
+    .visor-col{padding:12px 11px;}
+    .visor-mini{font-size:10.5px;}
+    .visor-bar-row .vbv{font-size:13px;}
+  }
+
+  .home-grid{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
+  }
+  .home-grid-3{grid-template-columns:1fr 1fr 1fr;}
+  .home-grid-2{grid-template-columns:1fr 1fr;}
+  .home-btn{
+    background:#fff;border:1px solid var(--border);border-radius:14px;
+    padding:18px 8px 14px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:8px;text-align:center;transition:all .15s;font-family:inherit;
+    box-shadow:var(--shadow);min-height:122px;color:var(--text);
+  }
+  .home-btn:hover{transform:translateY(-1px);border-color:var(--primary);box-shadow:var(--shadow-md);}
+  .home-btn:active{transform:scale(.97);}
+  .home-btn .icon{
+    width:48px;height:48px;border-radius:12px;
+    background:rgba(0,68,129,.08);color:var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    font-size:19px;font-weight:800;letter-spacing:-.5px;
+    flex-shrink:0;
+  }
+  .home-btn .icon svg{width:30px;height:30px;}
+  .home-btn .lbl{
+    font-size:11.5px;font-weight:600;color:var(--text-soft);
+    line-height:1.25;letter-spacing:-.1px;text-align:center;
+  }
+  .home-btn.canje .icon{background:rgba(20,100,165,.12);color:var(--primary-light);}
+  .home-btn.pago  .icon{background:rgba(0,168,107,.12);color:var(--green);}
+  .home-btn.resumen .icon{background:rgba(45,204,205,.18);color:var(--primary-dark);}
+
+  /* En desktop: botones fluyen normalmente bajo el visor */
+  .home-fixed{
+    max-width:680px;margin:0 auto;padding:14px 14px 32px;
+  }
+  .home-fixed .home-grid + .home-grid{margin-top:10px;}
+
+  /* En mobile: botones fijos abajo de la pantalla, no scrollean */
+  @media (max-width:520px){
+    .home-page{padding:10px 10px 14px;}
+    .home-fixed{
+      position:fixed;left:0;right:0;bottom:0;
+      background:linear-gradient(180deg,rgba(244,246,249,0) 0%,var(--bg) 25%);
+      padding:14px 10px 14px;z-index:40;
+      max-width:680px;margin:0 auto;
+    }
+    .home-fixed .home-grid{max-width:680px;margin:0 auto;}
+    .home-btn{min-height:90px;padding:10px 6px 8px;gap:5px;}
+    .home-btn .icon{width:36px;height:36px;border-radius:9px;}
+    .home-btn .icon svg{width:22px;height:22px;}
+    .home-btn .lbl{font-size:10.5px;line-height:1.2;}
+  }
+
+  /* ───── MODAL CONTENT (cada panel desplegado) ───── */
+  .panel-header{
+    background:#fff;border-bottom:1px solid var(--border);
+    padding:14px 16px;display:flex;align-items:center;
+    position:sticky;top:0;z-index:99;box-shadow:var(--shadow);
+  }
+  .panel-title{
+    font-size:15px;font-weight:700;color:var(--text);
+    letter-spacing:-.2px;flex:1;
+  }
+
+  /* Barra de navegación: al final del panel, NO flotante */
+  .panel-nav{
+    display:flex;gap:8px;justify-content:center;
+    max-width:680px;margin:8px auto 0;
+    padding:0 14px calc(12px + env(safe-area-inset-bottom));
+  }
+  .panel-nav .pnav-btn{
+    flex:0 1 160px;min-height:40px;padding:0 18px;
+    border-radius:10px;border:1px solid var(--border);
+    background:#fff;color:var(--primary);
+    font-family:inherit;font-weight:700;font-size:13px;letter-spacing:.1px;
+    cursor:pointer;box-shadow:var(--shadow);
+    transition:all .12s;
+  }
+  .panel-nav .pnav-btn:hover{box-shadow:var(--shadow-md);}
+  .panel-nav .pnav-btn:active{transform:scale(.97);}
+  .panel-nav .pnav-back{}
+  .panel-nav .pnav-next{}
+
+  /* PDF download button inline */
+  .pdf-action{
+    background:#fff;border:1px solid var(--border);border-radius:14px;
+    padding:14px 16px;margin-top:10px;display:flex;align-items:center;
+    gap:12px;box-shadow:var(--shadow);
+  }
+  .pdf-action .info{flex:1;min-width:0;}
+  .pdf-action .info .t{
+    font-size:13px;font-weight:600;color:var(--text);letter-spacing:-.1px;
+  }
+  .pdf-action .info .s{
+    font-size:11px;color:var(--muted);margin-top:2px;
+  }
+  .pdf-btn{
+    background:var(--primary);color:#fff;border:none;border-radius:11px;
+    padding:11px 16px;font-family:inherit;font-weight:700;font-size:13px;
+    cursor:pointer;letter-spacing:.1px;flex-shrink:0;display:flex;
+    align-items:center;gap:6px;transition:all .15s;box-shadow:var(--shadow);
+  }
+  .pdf-btn:hover{background:var(--primary-light);}
+  .pdf-btn:active{transform:scale(.97);}
+  .pdf-btn::before{
+    content:'';width:11px;height:11px;
+    border:1.8px solid currentColor;border-top:none;border-left:none;
+    transform:rotate(45deg);margin-bottom:3px;
+    border-radius:1px;
+  }
+  .pdf-btn.green{background:var(--green);}
+  .pdf-btn.green:hover{background:#00c47e;}
+  .pdf-btn.accent{background:var(--accent);color:var(--primary-dark);}
+  .pdf-btn.accent:hover{background:#26b8b9;}
+
+  /* hide tabs (replaced) */
+  .tabs{display:none !important;}
+  /* ───── FLETE BLOCK (corto / salida / directo) ───── */
+  .flete-block{
+    border-top:1px solid var(--border);padding:14px 18px;
+    background:var(--surface);
+  }
+  .flete-head{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:10px;margin-bottom:10px;flex-wrap:wrap;
+  }
+  .flete-title-wrap{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  }
+  .flete-title{
+    font-size:13px;font-weight:600;color:var(--text-soft);
+  }
+  .flete-tipo{
+    display:flex;background:var(--surface2);border:1px solid var(--border);
+    border-radius:7px;padding:1px;gap:0;
+  }
+  .ftipo-btn{
+    background:transparent;border:none;border-radius:5px;
+    padding:3px 9px;font-family:inherit;font-size:10.5px;font-weight:600;
+    color:var(--muted);cursor:pointer;letter-spacing:.1px;transition:all .15s;
+  }
+  .ftipo-btn.active{background:var(--accent);color:var(--primary-dark);}
+  .flete-modo{
+    display:flex;background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;padding:2px;gap:0;
+  }
+  .fmodo-btn{
+    background:transparent;border:none;border-radius:6px;
+    padding:5px 11px;font-family:inherit;font-size:11px;font-weight:600;
+    color:var(--muted);cursor:pointer;letter-spacing:.1px;transition:all .15s;
+  }
+  .fmodo-btn.active{background:var(--primary);color:white;}
+  .flete-body{display:flex;flex-direction:column;gap:8px;}
+  .fb-row{display:flex;gap:8px;align-items:center;}
+  .fb-tarifa input{flex:1;min-width:0;}
+  .fb-km{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;align-items:end;}
+  .km-input{display:flex;flex-direction:column;gap:4px;min-width:0;}
+  .km-input label{font-size:10px;color:var(--muted);font-weight:500;letter-spacing:.2px;}
+  .km-input input{font-size:13px;padding:8px 10px;}
+  .aj-stepper{
+    display:flex;align-items:stretch;gap:0;
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:9px;overflow:hidden;
+  }
+  .aj-stepper .aj-btn{
+    width:36px;flex-shrink:0;background:white;border:none;border-right:1px solid var(--border);
+    font-family:inherit;font-size:18px;font-weight:600;color:var(--primary);
+    cursor:pointer;line-height:1;padding:0;transition:background .12s;
+    -webkit-tap-highlight-color:rgba(0,68,129,.15);
+  }
+  .aj-stepper .aj-btn:last-child{border-right:none;border-left:1px solid var(--border);}
+  .aj-stepper .aj-btn:active{background:rgba(0,68,129,.08);}
+  .aj-stepper .aj-num{
+    flex:1;min-width:0;border:none !important;background:transparent !important;
+    text-align:center;font-weight:700;
+  }
+  .aj-stepper .aj-num:focus{box-shadow:none !important;}
+  .km-result{
+    display:flex;flex-direction:column;justify-content:flex-end;gap:2px;
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:9px;padding:7px 10px;min-width:0;
+  }
+  .km-result .lbl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:600;}
+  .km-result .val{font-size:13px;font-weight:700;color:var(--primary);font-feature-settings:'tnum';}
+  @media (max-width:420px){
+    .fb-km{grid-template-columns:1fr 1fr;gap:6px;}
+    .km-result{grid-column:1/-1;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-mark">LT</div>
+  <h1>Liquidación <span>Total</span></h1>
+</header>
+<div class="tabs">
+  <div class="tab"  onclick="switchTab('op')">Operación</div>
+  <div class="tab t-canje" onclick="switchTab('canje')">Canje</div>
+  <div class="tab t-pago"  onclick="switchTab('pago')">Pago</div>
+  <div class="tab"         onclick="switchTab('resumen')">Resumen</div>
+</div>
+
+<!-- ══ VISOR PERMANENTE (Kilos necesarios estilo op-result) ══ -->
+<div class="visor-wrap">
+  <div class="visor">
+    <div class="visor-head">Resultado de la operación</div>
+    <div class="visor-cols">
+      <div class="visor-col c">
+        <div class="visor-col-head">Canje · Cancelación</div>
+        <div class="visor-kilos" id="home_kc">— tn</div>
+        <div class="visor-tn" id="home_kc_neto">—</div>
+        <div class="visor-mini">
+          Gastos: <span id="home_kc_gastos">—</span><br>
+          Deuda: <span id="home_kc_deuda">—</span><br>
+          Total: <span id="home_kc_total">—</span><br>
+          Neto liq: <span id="home_kc_lq">—</span>
+        </div>
+      </div>
+      <div class="visor-col p">
+        <div class="visor-col-head">Pago · Cobro</div>
+        <div class="visor-kilos" id="home_kp">— tn</div>
+        <div class="visor-tn" id="home_kp_neto">—</div>
+        <div class="visor-mini">
+          A cobrar: <span id="home_kp_cobrar">—</span><br>
+          Neto liq: <span id="home_kp_lq">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="visor-bar">
+      <div class="visor-bar-row">
+        <span class="vbl">Total kilos brutos</span>
+        <span class="vbv" id="home_total_kilos">—</span>
+      </div>
+      <div class="visor-bar-row" id="home_neto_row">
+        <span class="vbl" style="color:var(--primary)">Total neto liquidable</span>
+        <span class="vbv" id="home_total_neto" style="color:var(--primary)">—</span>
+      </div>
+      <div class="visor-bar-row">
+        <span class="vbl">Total neto recibido</span>
+        <span class="vbv" id="home_neto_recibido">—</span>
+      </div>
+      <div class="visor-bar-row neg">
+        <span class="vbl" id="home_gastos_lbl">Gastos + deuda</span>
+        <span class="vbv vbv-neg" id="home_gastos_total">—</span>
+      </div>
+      <div class="visor-bar-row hr">
+        <span class="vbl" id="home_recibis_lbl">Lo que recibís</span>
+        <span class="vbv acc" id="home_recibis">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ HOME (botones) ══ -->
+<div class="tab-content active" id="tab-home">
+<div class="home-page">
+
+</div>
+
+<div class="home-fixed">
+  <!-- Botones -->
+  <div class="home-grid home-grid-3">
+    <button class="home-btn" onclick="switchTab('datos')">
+      <span class="icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="11" y="9" width="26" height="32" rx="3"/>
+          <path d="M19 6h10a2 2 0 0 1 2 2v3H17V8a2 2 0 0 1 2-2z"/>
+          <path d="M16 19l3 3 5-6M16 28l3 3 5-6M16 37l3 3 5-6"/>
+          <path d="M28 20h6M28 29h6M28 38h6"/>
+        </svg>
+      </span>
+      <span class="lbl">Datos de la<br>operación</span>
+    </button>
+    <button class="home-btn" onclick="switchTab('gastos')">
+      <span class="icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 14h22v18H5z"/>
+          <path d="M27 20h9l5 5v7H27z"/>
+          <circle cx="14" cy="36" r="3.5"/>
+          <circle cx="34" cy="36" r="3.5"/>
+          <circle cx="16" cy="23" r="3.5"/>
+          <path d="M16 21v.5M16 24.5V25M14.5 22.5h3"/>
+        </svg>
+      </span>
+      <span class="lbl">Condición<br>de recibo</span>
+    </button>
+    <button class="home-btn resumen" onclick="switchTab('resumen')">
+      <span class="icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="24" r="16"/>
+          <path d="M24 8v16l11 7"/>
+          <path d="M24 24L9 19" stroke-dasharray="2 3"/>
+        </svg>
+      </span>
+      <span class="lbl">Resumen</span>
+    </button>
+  </div>
+
+  <!-- Liquidaciones -->
+  <div class="home-grid home-grid-2" style="margin-top:10px">
+    <button class="home-btn canje" onclick="switchTab('canje')">
+      <span class="icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 18a13 13 0 0 1 22-7"/>
+          <path d="M33 7v6h-6"/>
+          <path d="M37 30a13 13 0 0 1-22 7"/>
+          <path d="M15 41v-6h6"/>
+        </svg>
+      </span>
+      <span class="lbl">Liquidación<br>Canje</span>
+    </button>
+    <button class="home-btn pago" onclick="switchTab('pago')">
+      <span class="icon">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 36c4-4 8-3 12-1s8 4 14 2 8-6 10-9"/>
+          <rect x="14" y="14" width="22" height="14" rx="2"/>
+          <circle cx="25" cy="21" r="3.5"/>
+          <path d="M14 18h3M33 24h3"/>
+        </svg>
+      </span>
+      <span class="lbl">Liquidación<br>Pago</span>
+    </button>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ TAB OPERACIÓN — secciones se muestran selectivamente según botón home ══ -->
+<div class="tab-content" id="tab-op">
+<div class="page">
+
+  <div class="section sec-datos">
+    <div class="section-head"><span class="dot"></span>Parámetros</div>
+    <div class="inputs-grid">
+      <div class="input-group full"><label>Grano</label>
+        <select id="grano">
+          <option value="soja">Soja</option>
+          <option value="maiz">Maíz</option>
+          <option value="trigo">Trigo</option>
+          <option value="cebada">Cebada</option>
+          <option value="girasol">Girasol</option>
+        </select>
+      </div>
+      <div class="input-group"><label>TC Comprador ($/USD)<small style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:9px;display:block">precio · plus</small></label><input type="text" id="tc" value="1400" inputmode="decimal" class="num-input" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      <div class="input-group"><label>TC Vendedor ($/USD)<small style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:9px;display:block">gastos · deuda USD</small></label><input type="text" id="tc_vendedor" value="1420" inputmode="decimal" class="num-input" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      <div class="input-group">
+        <label>Precio</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" id="precio" value="380" inputmode="decimal" class="num-input" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)" style="flex:1;min-width:0">
+          <button class="curr-btn active" id="precio_curr" data-curr="usd" onclick="toggleCurr('precio')">USD/tn</button>
+        </div>
+      </div>
+      <div class="input-group"><label>Factor (%)</label><input type="text" id="factor" value="100" inputmode="decimal" class="num-input" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      <div class="input-group"><label>Plus (USD/tn)</label><input type="text" id="plus_usd" value="0" inputmode="decimal" class="num-input" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      <div class="input-group"><label>Plus ($/tn)</label><input type="text" id="plus_ars_input" value="0" inputmode="decimal" class="num-input" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">ROG activo <span class="tag">IVA split</span></span>
+      <label class="toggle"><input type="checkbox" id="rog" checked><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+    </div>
+  </div>
+
+  <div class="section sec-gastos">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Condiciones de recibo <small style="margin-left:4px;font-size:9px;color:var(--muted)">+ IVA 21%</small></div>
+    <div class="gastos-grid">
+      <!-- Fila 1: Comisión · Paritarias · Secada -->
+      <div class="g-cell">
+        <label>Comisión <small style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">%</small></label>
+        <div class="g-inputs">
+          <input type="text" id="com" value="2" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+        </div>
+      </div>
+      <div class="g-cell">
+        <label>Paritarias</label>
+        <div class="g-inputs">
+          <input type="text" id="g_paritarias" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          <button class="curr-btn active" id="g_paritarias_curr" data-curr="usd" onclick="toggleCurr('g_paritarias')">USD/tn</button>
+        </div>
+      </div>
+      <div class="g-cell">
+        <label>Secada <small style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">por punto</small></label>
+        <div class="g-inputs">
+          <input type="text" id="g_secada" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          <button class="curr-btn active" id="g_secada_curr" data-curr="usd" onclick="toggleCurr('g_secada')">USD/pt</button>
+        </div>
+      </div>
+      <!-- Fila 2: Fumigada · Puntos libres · Humedad de recibo -->
+      <div class="g-cell">
+        <label>Fumigada</label>
+        <div class="g-inputs">
+          <input type="text" id="g_fumigada" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          <button class="curr-btn active" id="g_fumigada_curr" data-curr="usd" onclick="toggleCurr('g_fumigada')">USD/tn</button>
+        </div>
+      </div>
+      <div class="g-cell">
+        <label>Puntos libres</label>
+        <div class="g-inputs">
+          <input type="text" id="puntos_libres" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+        </div>
+      </div>
+      <div class="g-cell">
+        <label>Humedad de recibo <small id="hum_base_display" style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:9px">base —</small></label>
+        <div class="g-inputs">
+          <input type="text" id="hum_recibo" value="" inputmode="decimal" class="num-input" placeholder="%" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Flete corto -->
+    <div class="flete-block" data-flete="corto">
+      <div class="flete-head">
+        <span class="flete-title">Flete corto</span>
+        <div class="flete-modo">
+          <button class="fmodo-btn active" data-fmodo="tarifa" onclick="setFleteModo('corto','tarifa')">Tarifa</button>
+          <button class="fmodo-btn" data-fmodo="km" onclick="setFleteModo('corto','km')">km</button>
+        </div>
+      </div>
+      <div class="flete-body">
+        <div class="fb-row fb-tarifa">
+          <input type="text" id="g_flete_corto" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          <button class="curr-btn active" id="g_flete_corto_curr" data-curr="usd" onclick="toggleCurr('g_flete_corto')">USD/tn</button>
+        </div>
+        <div class="fb-row fb-km" style="display:none">
+          <div class="km-input">
+            <label>km</label>
+            <input type="text" id="g_flete_corto_km" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          </div>
+          <div class="km-input km-input-aj">
+            <label>Ajuste %</label>
+            <div class="aj-stepper">
+              <button type="button" class="aj-btn" onclick="ajustarPct('flete_corto',-1)">−</button>
+              <input type="text" id="g_flete_corto_aj" value="0" inputmode="decimal" class="num-input aj-num" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+              <button type="button" class="aj-btn" onclick="ajustarPct('flete_corto',1)">+</button>
+            </div>
+          </div>
+          <div class="km-result">
+            <span class="lbl">Tarifa</span>
+            <span class="val" id="g_flete_corto_calc">— $/tn</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flete / directo -->
+    <div class="flete-block" data-flete="salida">
+      <div class="flete-head">
+        <div class="flete-title-wrap">
+          <span class="flete-title" id="flete_largo_title">Flete</span>
+          <div class="flete-tipo">
+            <button class="ftipo-btn active" data-ftipo="largo" onclick="setFleteTipo('largo')">Largo</button>
+            <button class="ftipo-btn" data-ftipo="directo" onclick="setFleteTipo('directo')">Directo</button>
+          </div>
+        </div>
+        <div class="flete-modo">
+          <button class="fmodo-btn active" data-fmodo="tarifa" onclick="setFleteModo('salida','tarifa')">Tarifa</button>
+          <button class="fmodo-btn" data-fmodo="km" onclick="setFleteModo('salida','km')">km</button>
+        </div>
+      </div>
+      <div class="flete-body">
+        <div class="fb-row fb-tarifa">
+          <input type="text" id="g_flete_largo" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          <button class="curr-btn active" id="g_flete_largo_curr" data-curr="usd" onclick="toggleCurr('g_flete_largo')">USD/tn</button>
+        </div>
+        <div class="fb-row fb-km" style="display:none">
+          <div class="km-input">
+            <label>km</label>
+            <input type="text" id="g_flete_largo_km" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+          </div>
+          <div class="km-input km-input-aj">
+            <label>Ajuste %</label>
+            <div class="aj-stepper">
+              <button type="button" class="aj-btn" onclick="ajustarPct('flete_largo',-1)">−</button>
+              <input type="text" id="g_flete_largo_aj" value="0" inputmode="decimal" class="num-input aj-num" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)">
+              <button type="button" class="aj-btn" onclick="ajustarPct('flete_largo',1)">+</button>
+            </div>
+          </div>
+          <div class="km-result">
+            <span class="lbl">Tarifa</span>
+            <span class="val" id="g_flete_largo_calc">— $/tn</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Volátil -->
+    <div class="toggle-row" style="border-top:1px solid var(--border);padding:14px 18px">
+      <span class="toggle-label">Volátil <small style="color:var(--muted);font-size:10px" id="volatil_lbl">aplicar</small></span>
+      <label class="toggle"><input type="checkbox" id="volatil_on" checked><span class="toggle-track"></span><span class="toggle-thumb"></span></label>
+    </div>
+  </div>
+
+  <div class="section sec-datos">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Modo de cálculo</div>
+    <div style="display:flex;gap:0;padding:12px 16px;">
+      <button class="mode-btn active" id="mode_importe" onclick="setModo('importe')">Por importe</button>
+      <button class="mode-btn"        id="mode_kilos"   onclick="setModo('kilos')">Por tonelada</button>
+    </div>
+    <div id="kilos_inputs" style="display:none;border-top:1px solid var(--border)">
+      <div class="inputs-grid">
+        <div class="input-group full"><label>Total kilos (tn)</label><input type="text" id="k_total" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      </div>
+      <div style="display:flex;gap:0;padding:0 16px 14px;">
+        <button class="mode-btn active" id="dest_auto"  onclick="setDest('auto')">Auto</button>
+        <button class="mode-btn"        id="dest_canje" onclick="setDest('canje')">Todo canje</button>
+        <button class="mode-btn"        id="dest_pago"  onclick="setDest('pago')">Todo pago</button>
+      </div>
+    </div>
+  </div>
+  <div class="section sec-datos sec-importe-only">
+    <div class="section-head"><span class="dot" style="background:var(--red)"></span>Deuda de insumos <small style="margin-left:4px;font-size:9px;color:var(--muted)">ya incluye IVA</small></div>
+    <div class="inputs-grid">
+      <div class="input-group"><label>Deuda (u$s)</label><input type="text" id="deuda_usd" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      <div class="input-group"><label>Deuda ($)</label><input type="text" id="deuda_ars" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+    </div>
+  </div>
+
+  <div class="section sec-datos sec-importe-only">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Importe a cobrar <small style="margin-left:4px;font-size:9px;color:var(--muted)">liquidación en pago</small></div>
+    <div class="inputs-grid">
+      <div class="input-group"><label>Cobrar (u$s)</label><input type="text" id="cobrar_usd" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+      <div class="input-group"><label>Cobrar ($)</label><input type="text" id="cobrar_ars" value="0" inputmode="decimal" class="num-input" placeholder="0" oninput="onNumInput(this)" onblur="onNumBlur(this)" onfocus="onNumFocus(this)"></div>
+    </div>
+  </div>
+
+  <!-- MODO -->
+
+  <!-- RESULTADO (oculto en nueva UI, los datos están en el home) -->
+  <div class="op-result sec-modo" style="display:none">
+    <div class="op-result-head" id="op_result_head">Kilos necesarios</div>
+    <div class="op-cols">
+      <div class="op-col c">
+        <div class="col-head">Canje — cancelación</div>
+        <div class="kilos-big" id="kr_c_kilos">—</div>
+        <div class="tn">toneladas brutas a entregar</div>
+        <div class="mini" style="background:rgba(20,100,165,.08);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+          <span style="color:var(--primary);font-weight:600">Netas liquidables:</span> <span id="kr_c_kilos_neto" style="font-weight:700;color:var(--primary)">—</span>
+        </div>
+        <div class="mini">
+          Gastos: <span id="kr_c_gastos">—</span><br>
+          Deuda: <span id="kr_c_deuda">—</span><br>
+          Total: <span id="kr_c_total">—</span><br>
+          Neto liq: <span id="kr_c_neto">—</span>
+        </div>
+      </div>
+      <div class="op-col p">
+        <div class="col-head">Pago — cobrar</div>
+        <div class="kilos-big" id="kr_p_kilos">—</div>
+        <div class="tn">toneladas brutas a entregar</div>
+        <div class="mini" style="background:rgba(0,168,107,.08);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+          <span style="color:var(--green);font-weight:600">Netas liquidables:</span> <span id="kr_p_kilos_neto" style="font-weight:700;color:var(--green)">—</span>
+        </div>
+        <div class="mini">
+          A cobrar: <span id="kr_p_cobrar">—</span><br>
+          Neto liq: <span id="kr_p_neto">—</span>
+        </div>
+      </div>
+    </div>
+    <div class="total-kilos-bar" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="lbl">Total bruto a entregar</span>
+        <span class="val" id="kr_total_kilos">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px dashed var(--border)" id="kr_neto_row">
+        <span class="lbl" style="color:var(--primary)">Total neto liquidable</span>
+        <span style="font-weight:700;font-size:16px;color:var(--primary)" id="kr_total_neto">—</span>
+      </div>
+    </div>
+    <div id="kr_analytics" style="display:none;border-top:1px solid var(--border);padding:14px 16px;">
+      <div style="font-family:'Syne',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px" id="kr_analytics_title">—</div>
+      <div style="background:rgba(42,51,71,.3);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:11px;color:var(--label);font-weight:600">Total neto recibido</span>
+        <div style="text-align:right">
+          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:var(--text)" id="an_base">—</span>
+          <small style="display:block;color:var(--muted);font-size:10px" id="an_base_det"></small>
+        </div>
+      </div>
+      <div id="kr_analytics_bars"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ TAB CANJE ══ -->
+<div class="tab-content" id="tab-canje">
+<div class="page">
+  <div class="liq-banner canje">Cancelación en canje</div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Importe</div>
+    <div class="result-rows">
+      <div class="result-row"><span class="lbl">Precio Venta</span><span class="val" id="c_precio_ars">-</span></div>
+      <div class="result-row"><span class="lbl">Kilos</span><span class="val" id="c_kilos">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Importe Bruto</span><span class="val" id="c_bruto">-</span></div>
+      <div class="result-row"><span class="lbl">IVA (10,5%)</span><span class="val" id="c_iva">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Total</span><span class="val" id="c_total">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Deducciones</div>
+    <div class="result-rows">
+      <div class="result-row deduct"><span class="lbl">Comisión (<span id="c_com_pct">2</span>%)<small id="c_com_det"></small></span><span class="val" id="c_com">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Imp. Sellos<small>10,5‰ Comisión+IVA</small></span><span class="val" id="c_sellos">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Derecho Reg./Gtos Entrega<small>6‰ del Bruto</small></span><span class="val" id="c_derecho">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Honorarios Cámara<small>$915 × kilos + IVA</small></span><span class="val" id="c_honorarios">-</span></div>
+      <div class="result-row total-ded"><span class="lbl">Total Deducciones</span><span class="val" id="c_total_ded">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--purple)"></span>Retenciones</div>
+    <div class="result-rows">
+      <div class="result-row ret"><span class="lbl">IVA Retención<small>Canje — exento</small></span><span class="val">$ 0,00</span></div>
+      <div class="result-row ret"><span class="lbl">IIBB<small>0,75% del Bruto</small></span><span class="val" id="c_iibb">-</span></div>
+      <div class="result-row ret"><span class="lbl">Ganancias<small>Canje — exento</small></span><span class="val">$ 0,00</span></div>
+      <div class="result-row total-ret"><span class="lbl">Total Retenciones</span><span class="val" id="c_total_ret">-</span></div>
+    </div>
+  </div>
+  <div class="big-total">
+    <div class="row"><span class="lbl">Total a pagar</span><div style="text-align:right"><div class="amount" id="c_total_pagar">-</div><div class="usd" id="c_total_pagar_usd">-</div></div></div>
+    <div class="row cbu" id="c_row_cbu" style="display:none"><span class="lbl">CBU ROG (2,5%)</span><div><div class="amount" id="c_cbu_rog">-</div></div></div>
+    <div class="row importe"><span class="lbl">IMPORTE A PAGAR</span><div style="text-align:right"><div class="amount" id="c_importe_pagar">-</div><div class="usd" id="c_importe_pagar_usd">-</div></div></div>
+  </div>
+  <div class="plus-card">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Plus</div>
+    <div class="plus-result">
+      <div class="row"><span class="lbl">Plus ARS</span><span class="val" id="c_plus_ars">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus $</span><span class="val" id="c_total_plus">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus u$s</span><span class="val" id="c_total_plus_usd">-</span></div>
+    </div>
+  </div>
+
+  <div class="pdf-action">
+    <div class="info">
+      <div class="t">Liquidación de canje</div>
+      <div class="s">Descargar el detalle en PDF</div>
+    </div>
+    <button class="pdf-btn" onclick="descargarPDF('canje')">PDF</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ TAB PAGO ══ -->
+<div class="tab-content" id="tab-pago">
+<div class="page">
+  <div class="liq-banner pago">Cobro en pago</div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Importe</div>
+    <div class="result-rows">
+      <div class="result-row"><span class="lbl">Precio Venta</span><span class="val" id="p_precio_ars">-</span></div>
+      <div class="result-row"><span class="lbl">Kilos</span><span class="val" id="p_kilos">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Importe Bruto</span><span class="val" id="p_bruto">-</span></div>
+      <div class="result-row"><span class="lbl">IVA (10,5%)</span><span class="val" id="p_iva">-</span></div>
+      <div class="result-row subtotal"><span class="lbl">Total</span><span class="val" id="p_total">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Deducciones</div>
+    <div class="result-rows">
+      <div class="result-row deduct"><span class="lbl">Comisión (<span id="p_com_pct">2</span>%)<small id="p_com_det"></small></span><span class="val" id="p_com">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Imp. Sellos<small>10,5‰ Comisión+IVA</small></span><span class="val" id="p_sellos">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Derecho Reg./Gtos Entrega<small>6‰ del Bruto</small></span><span class="val" id="p_derecho">-</span></div>
+      <div class="result-row deduct"><span class="lbl">Honorarios Cámara<small>$915 × kilos + IVA</small></span><span class="val" id="p_honorarios">-</span></div>
+      <div class="result-row total-ded"><span class="lbl">Total Deducciones</span><span class="val" id="p_total_ded">-</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Retenciones</div>
+    <div class="result-rows">
+      <div class="result-row ret"><span class="lbl">IVA Retención<small id="p_iva_lbl">5% Bruto–Com (ROG)</small></span><span class="val" id="p_ret_iva">-</span></div>
+      <div class="result-row ret"><span class="lbl">IIBB<small>0,75% del Bruto</small></span><span class="val" id="p_iibb">-</span></div>
+      <div class="result-row ret"><span class="lbl">Ganancias<small id="p_gan_lbl">2% Bruto–Com–MNI</small></span><span class="val" id="p_ganancias">-</span></div>
+      <div class="result-row total-ret"><span class="lbl">Total Retenciones</span><span class="val" id="p_total_ret">-</span></div>
+    </div>
+  </div>
+  <div class="big-total">
+    <div class="row"><span class="lbl">Total a pagar</span><div style="text-align:right"><div class="amount" id="p_total_pagar">-</div><div class="usd" id="p_total_pagar_usd">-</div></div></div>
+    <div class="row cbu" id="p_row_cbu" style="display:none"><span class="lbl">CBU ROG (2,5%)</span><div><div class="amount" id="p_cbu_rog">-</div></div></div>
+    <div class="row importe"><span class="lbl">IMPORTE A PAGAR</span><div style="text-align:right"><div class="amount" id="p_importe_pagar">-</div><div class="usd" id="p_importe_pagar_usd">-</div></div></div>
+  </div>
+  <div class="plus-card">
+    <div class="section-head"><span class="dot" style="background:var(--green)"></span>Plus</div>
+    <div class="plus-result">
+      <div class="row"><span class="lbl">Plus ARS</span><span class="val" id="p_plus_ars">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus $</span><span class="val" id="p_total_plus">-</span></div>
+      <div class="row"><span class="lbl">Total con Plus u$s</span><span class="val" id="p_total_plus_usd">-</span></div>
+    </div>
+  </div>
+
+  <div class="pdf-action">
+    <div class="info">
+      <div class="t">Liquidación de pago</div>
+      <div class="s">Descargar el detalle en PDF</div>
+    </div>
+    <button class="pdf-btn green" onclick="descargarPDF('pago')">PDF</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ TAB RESUMEN ══ -->
+<div class="tab-content" id="tab-resumen">
+<div class="page">
+
+  <div class="res-hero">
+    <div class="res-hero-top">
+      <div>
+        <div class="res-title">Resumen de operación</div>
+        <div class="res-date" id="res_fecha">—</div>
+      </div>
+      <div class="res-badge">LT</div>
+    </div>
+    <div class="res-hero-kilos">
+      <span class="n" id="res_kilos">—</span>
+      <span class="u">toneladas</span>
+    </div>
+    <div class="res-hero-sub">Total operación</div>
+
+    <!-- Canje / Pago dentro del hero -->
+    <div class="res-hero-split">
+      <div class="rhs-col rhs-canje">
+        <div class="rhs-label">Canje</div>
+        <div class="rhs-kilos" id="res_canje_kilos">— tn</div>
+        <div class="rhs-line"><span>Tn netas liq.</span><b id="res_canje_neto">—</b></div>
+        <div class="rhs-line" id="res_canje_plus_row" style="display:none"><span>Plus</span><b id="res_canje_plus">—</b></div>
+        <div class="rhs-line rhs-total"><span>Total</span><b id="res_canje_total">—</b></div>
+      </div>
+      <div class="rhs-col rhs-pago">
+        <div class="rhs-label">Pago</div>
+        <div class="rhs-kilos" id="res_pago_kilos">— tn</div>
+        <div class="rhs-line"><span>Tn netas liq.</span><b id="res_pago_neto">—</b></div>
+        <div class="rhs-line" id="res_pago_plus_row" style="display:none"><span>Plus</span><b id="res_pago_plus">—</b></div>
+        <div class="rhs-line rhs-total"><span>Total</span><b id="res_pago_total">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- datos operación -->
+  <div class="res-card">
+    <div class="res-card-title">Datos</div>
+    <div class="res-row"><span>Grano</span><b id="res_grano">—</b></div>
+    <div class="res-row"><span>Tipo de cambio</span><b id="res_tc">—</b></div>
+    <div class="res-row"><span>Precio</span><b id="res_precio">—</b></div>
+    <div class="res-row"><span>Comisión · ROG</span><b id="res_com">—</b></div>
+    <div class="res-row" id="res_plus_row" style="display:none"><span>Plus</span><b id="res_plus">—</b></div>
+  </div>
+
+  <!-- mermas -->
+  <div class="res-card" id="res_mermas_card" style="display:none">
+    <div class="res-card-title">Mermas aplicadas</div>
+    <div class="res-row"><span>Humedad recibo</span><b id="res_hum_recibo">—</b></div>
+    <div class="res-row"><span id="res_secado_lbl">Merma física</span><b id="res_m_secado">—</b></div>
+    <div class="res-row"><span>Volátil</span><b id="res_m_volatil">—</b></div>
+    <div class="res-row res-sum"><span>Merma total</span><b id="res_m_total">—</b></div>
+    <div class="res-row" id="res_puntos_row" style="display:none;border-top:1px solid var(--border);margin-top:6px;padding-top:8px"><span>Puntos a secar</span><b id="res_puntos_secar">—</b></div>
+  </div>
+
+  <!-- gastos -->
+  <div class="res-card">
+    <div class="res-card-title">Condiciones de recibo</div>
+    <div class="res-row" id="res_g_paritarias_row" style="display:none"><span>Paritarias <small style="color:var(--muted);font-size:10px" id="res_g_paritarias_det"></small></span><b id="res_g_paritarias">—</b></div>
+    <div class="res-row" id="res_g_fumigada_row" style="display:none"><span>Fumigada <small style="color:var(--muted);font-size:10px" id="res_g_fumigada_det"></small></span><b id="res_g_fumigada">—</b></div>
+    <div class="res-row" id="res_g_secada_row" style="display:none"><span>Secada <small style="color:var(--muted);font-size:10px" id="res_g_secada_det"></small></span><b id="res_g_secada">—</b></div>
+    <div class="res-row" id="res_g_flete_corto_row" style="display:none"><span>Flete corto <small style="color:var(--muted);font-size:10px" id="res_g_flete_corto_det"></small></span><b id="res_g_flete_corto">—</b></div>
+    <div class="res-row" id="res_g_flete_largo_row" style="display:none"><span><span id="res_g_flete_largo_lbl">Flete</span> <small style="color:var(--muted);font-size:10px" id="res_g_flete_largo_det"></small></span><b id="res_g_flete_largo">—</b></div>
+    <div class="res-row"><span>Subtotal sin IVA</span><b id="res_g_subtotal">—</b></div>
+    <div class="res-row"><span>IVA 21%</span><b id="res_g_iva">—</b></div>
+    <div class="res-row res-sum" style="border-top-color:var(--primary-light)"><span>Total recibo c/IVA</span><b id="res_gastos">—</b></div>
+
+    <!-- Deducciones de las liquidaciones -->
+    <div class="res-card-title" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">Deducciones de la liquidación</div>
+    <div class="res-row" id="res_d_comision_row"><span>Comisión <small style="color:var(--muted);font-size:10px" id="res_d_comision_det"></small></span><b id="res_d_comision">—</b></div>
+    <div class="res-row"><span>Imp. sellos <small style="color:var(--muted);font-size:10px">10,5‰</small></span><b id="res_d_sellos">—</b></div>
+    <div class="res-row"><span>Derecho registro <small style="color:var(--muted);font-size:10px">6‰ del bruto</small></span><b id="res_d_derecho">—</b></div>
+    <div class="res-row"><span>Honorarios cámara <small style="color:var(--muted);font-size:10px">$915 × kilos + IVA</small></span><b id="res_d_honorarios">—</b></div>
+    <div class="res-row res-sum" style="border-top-color:var(--primary-light)"><span>Total deducciones</span><b id="res_d_total">—</b></div>
+
+    <!-- Retenciones de la liquidación -->
+    <div class="res-card-title" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">Retenciones de la liquidación</div>
+    <div class="res-row"><span>IVA retención <small style="color:var(--muted);font-size:10px" id="res_r_iva_det">5% / 10,5%</small></span><b id="res_r_iva">—</b></div>
+    <div class="res-row"><span>IIBB <small style="color:var(--muted);font-size:10px">0,75% del bruto</small></span><b id="res_r_iibb">—</b></div>
+    <div class="res-row"><span>Ganancias <small style="color:var(--muted);font-size:10px" id="res_r_gan_det">2% / 15% s/MNI</small></span><b id="res_r_gan">—</b></div>
+    <div class="res-row res-sum" style="border-top-color:var(--primary-light)"><span>Total retenciones</span><b id="res_r_total">—</b></div>
+
+    <div class="res-row" id="res_deuda_row" style="display:none;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)"><span>Deuda insumos</span><b id="res_deuda">—</b></div>
+    <div class="res-row res-sum"><span>Total a cubrir</span><b id="res_total_cubrir">—</b></div>
+  </div>
+
+  <!-- resultado final -->
+  <div class="res-final">
+    <div class="res-final-row">
+      <span>Total neto recibido</span>
+      <b id="res_neto_total">—</b>
+    </div>
+    <div class="res-final-row res-final-red">
+      <span id="res_gastos_lbl">Gastos + deuda</span>
+      <b id="res_gastos_neg">—</b>
+    </div>
+    <div class="res-final-row res-final-green res-final-big">
+      <span id="res_recibis_lbl">Lo que recibís</span>
+      <b id="res_recibis">—</b>
+    </div>
+  </div>
+
+  <div class="pdf-action">
+    <div class="info">
+      <div class="t">Resumen completo</div>
+      <div class="s">Descargar todo el detalle en PDF</div>
+    </div>
+    <button class="pdf-btn accent" onclick="descargarPDF('resumen')">PDF</button>
+  </div>
+
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+
+<script>
+const MNI=100000;
+
+// ─── Tablas de merma por secado (% merma según % humedad) ─────────────
+// Cada tabla: array de [humedad, merma]. Humedad base = primera fila.
+// Adicional por manipuleo según la cartilla de cada grano.
+const MERMA = {
+  soja: {
+    base: 13.5,
+    manipuleo: 0.10, // +0.10% por manipuleo
+    volatil: 0.50,   // +0.50% volátil (soja/girasol)
+    tabla: [
+      [13.6,0.69],[13.7,0.8],[13.8,0.92],[13.9,1.03],[14,1.15],[14.1,1.26],[14.2,1.38],[14.3,1.49],[14.4,1.61],[14.5,1.72],
+      [14.6,1.84],[14.7,1.95],[14.8,2.07],[14.9,2.18],[15,2.3],[15.1,2.41],[15.2,2.53],[15.3,2.64],[15.4,2.76],[15.5,2.87],
+      [15.6,2.99],[15.7,3.1],[15.8,3.22],[15.9,3.33],[16,3.45],[16.1,3.56],[16.2,3.68],[16.3,3.79],[16.4,3.91],[16.5,4.02],
+      [16.6,4.14],[16.7,4.25],[16.8,4.37],[16.9,4.48],[17,4.6],[17.1,4.71],[17.2,4.83],[17.3,4.94],[17.4,5.06],[17.5,5.17],
+      [17.6,5.29],[17.7,5.4],[17.8,5.52],[17.9,5.63],[18,5.75],[18.1,5.86],[18.2,5.98],[18.3,6.09],[18.4,6.21],[18.5,6.32],
+      [18.6,6.44],[18.7,6.55],[18.8,6.67],[18.9,6.78],[19,6.9],[19.1,7.01],[19.2,7.13],[19.3,7.24],[19.4,7.36],[19.5,7.47],
+      [19.6,7.59],[19.7,7.7],[19.8,7.82],[19.9,7.93],[20,8.05],[20.1,8.16],[20.2,8.28],[20.3,8.39],[20.4,8.51],[20.5,8.62],
+      [20.6,8.74],[20.7,8.85],[20.8,8.97],[20.9,9.08],[21,9.2],[21.1,9.31],[21.2,9.43],[21.3,9.54],[21.4,9.66],[21.5,9.77],
+      [21.6,9.89],[21.7,10],[21.8,10.11],[21.9,10.23],[22,10.34],[22.1,10.46],[22.2,10.57],[22.3,10.69],[22.4,10.8],[22.5,10.92],
+      [22.6,11.03],[22.7,11.15],[22.8,11.26],[22.9,11.38],[23,11.49],[23.1,11.61],[23.2,11.72],[23.3,11.84],[23.4,11.95],[23.5,12.07],
+      [23.6,12.18],[23.7,12.3],[23.8,12.41],[23.9,12.53],[24,12.64],[24.1,12.76],[24.2,12.87],[24.3,12.99],[24.4,13.1],[24.5,13.22],
+      [24.6,13.33],[24.7,13.45],[24.8,13.56],[24.9,13.68],[25,13.79]
+    ]
+  },
+  maiz: {
+    base: 14.5,
+    manipuleo: 0.25,
+    volatil: 0.30,
+    tabla: [
+      [14.6,1.27],[14.7,1.39],[14.8,1.5],[14.9,1.62],[15,1.73],[15.1,1.85],[15.2,1.97],[15.3,2.08],[15.4,2.2],[15.5,2.31],
+      [15.6,2.43],[15.7,2.54],[15.8,2.66],[15.9,2.77],[16,2.89],[16.1,3.01],[16.2,3.12],[16.3,3.24],[16.4,3.35],[16.5,3.47],
+      [16.6,3.58],[16.7,3.7],[16.8,3.82],[16.9,3.93],[17,4.05],[17.1,4.16],[17.2,4.28],[17.3,4.39],[17.4,4.51],[17.5,4.62],
+      [17.6,4.74],[17.7,4.86],[17.8,4.97],[17.9,5.09],[18,5.2],[18.1,5.32],[18.2,5.43],[18.3,5.55],[18.4,5.66],[18.5,5.78],
+      [18.6,5.9],[18.7,6.01],[18.8,6.13],[18.9,6.24],[19,6.36],[19.1,6.47],[19.2,6.59],[19.3,6.71],[19.4,6.82],[19.5,6.94],
+      [19.6,7.05],[19.7,7.17],[19.8,7.28],[19.9,7.4],[20,7.51],[20.1,7.63],[20.2,7.75],[20.3,7.86],[20.4,7.98],[20.5,8.09],
+      [20.6,8.21],[20.7,8.32],[20.8,8.44],[20.9,8.55],[21,8.67],[21.1,8.79],[21.2,8.9],[21.3,9.02],[21.4,9.13],[21.5,9.25],
+      [21.6,9.36],[21.7,9.48],[21.8,9.6],[21.9,9.71],[22,9.83],[22.1,9.94],[22.2,10.06],[22.3,10.17],[22.4,10.29],[22.5,10.4],
+      [22.6,10.52],[22.7,10.64],[22.8,10.75],[22.9,10.87],[23,10.98],[23.1,11.1],[23.2,11.21],[23.3,11.33],[23.4,11.45],[23.5,11.56],
+      [23.6,11.68],[23.7,11.79],[23.8,11.91],[23.9,12.02],[24,12.14],[24.1,12.25],[24.2,12.37],[24.3,12.49],[24.4,12.6],[24.5,12.72],
+      [24.6,12.83],[24.7,12.95],[24.8,13.06],[24.9,13.18],[25,13.29]
+    ]
+  },
+  trigo: {
+    base: 14,
+    manipuleo: 0.10,
+    volatil: 0.30,
+    tabla: [
+      [14.1,0.69],[14.2,0.81],[14.3,0.92],[14.4,1.04],[14.5,1.16],[14.6,1.27],[14.7,1.39],[14.8,1.5],[14.9,1.62],[15,1.73],
+      [15.1,1.85],[15.2,1.97],[15.3,2.08],[15.4,2.2],[15.5,2.31],[15.6,2.43],[16,2.54],[16.1,2.66],[16.2,2.77],[16.3,2.89],
+      [16.4,3.01],[16.5,3.12],[16.6,3.24],[16.7,3.35],[16.8,3.47],[16.9,3.58],[17,3.7],[17.1,3.82],[17.2,3.93],[17.3,4.05],
+      [17.4,4.16],[17.5,4.28],[17.6,4.39],[17.7,4.51],[17.8,4.62],[17.9,4.74],[18,4.86],[18.1,4.97],[18.2,5.09],[18.3,5.2],
+      [18.4,5.32],[18.5,5.43],[18.6,5.55],[18.7,5.66],[18.8,5.78],[18.9,5.9],[19,6.01],[19.1,6.13],[19.2,6.24],[19.3,6.36],
+      [19.4,6.47],[19.5,6.59],[19.6,6.71],[19.7,6.82],[19.8,6.94],[19.9,7.05],[20,7.17],[20.1,7.28],[20.2,7.4],[20.3,7.51],
+      [20.4,7.63],[20.5,7.75],[20.6,7.86],[20.7,7.98],[20.8,8.09],[20.9,8.21],[21,8.32],[21.1,8.44],[21.2,8.55],[21.3,8.67],
+      [21.4,8.79],[21.5,8.9],[21.6,9.02],[21.7,9.13],[21.8,9.25],[21.9,9.36],[22,9.48]
+    ]
+  },
+  girasol: {
+    base: 11,
+    manipuleo: 0.20,
+    volatil: 0.50,
+    tabla: [
+      [11.1,0.67],[11.2,0.78],[11.3,0.89],[11.4,1.01],[11.5,1.12],[11.6,1.23],[11.7,1.34],[11.8,1.45],[11.9,1.56],[12,1.68],
+      [12.1,1.79],[12.2,1.9],[12.3,2.01],[12.4,2.12],[12.5,2.23],[12.6,2.35],[12.7,2.46],[12.8,2.57],[12.9,2.68],[13,2.79],
+      [13.1,2.91],[13.2,3.02],[13.3,3.13],[13.4,3.24],[13.5,3.35],[13.6,3.46],[13.7,3.58],[13.8,3.69],[13.9,3.8],[14,3.91],
+      [14.1,4.02],[14.2,4.13],[14.3,4.25],[14.4,4.36],[14.5,4.47],[14.6,4.58],[14.7,4.69],[14.8,4.8],[14.9,4.92],[15,5.03],
+      [15.1,5.14],[15.2,5.25],[15.3,5.36],[15.4,5.47],[15.5,5.59],[15.6,5.7],[15.7,5.81],[15.8,5.92],[15.9,6.03],[16,6.15],
+      [16.1,6.26],[16.2,6.37],[16.3,6.48],[16.4,6.59],[16.5,6.7],[16.6,6.82],[16.7,6.93],[16.8,7.04],[16.9,7.15],[17,7.26],
+      [17.1,7.37],[17.2,7.49],[17.3,7.6],[17.4,7.71],[17.5,7.82],[17.6,7.93],[17.7,8.04],[17.8,8.16],[17.9,8.27],[18,8.38],
+      [18.1,8.49],[18.2,8.6]
+    ]
+  },
+  cebada: {
+    base: 14,
+    manipuleo: 0.10,
+    volatil: 0.30,
+    tabla: [
+      [14.1,0.69],[14.2,0.81],[14.3,0.92],[14.4,1.04],[14.5,1.16],[14.6,1.27],[14.7,1.39],[14.8,1.5],[14.9,1.62],[15,1.73],
+      [15.1,1.85],[15.2,1.97],[15.3,2.08],[15.4,2.2],[15.5,2.31],[15.6,2.43],[16,2.54],[16.1,2.66],[16.2,2.77],[16.3,2.89],
+      [16.4,3.01],[16.5,3.12],[16.6,3.24],[16.7,3.35],[16.8,3.47],[16.9,3.58],[17,3.7],[17.1,3.82],[17.2,3.93],[17.3,4.05],
+      [17.4,4.16],[17.5,4.28],[17.6,4.39],[17.7,4.51],[17.8,4.62],[17.9,4.74],[18,4.86],[18.1,4.97],[18.2,5.09],[18.3,5.2],
+      [18.4,5.32],[18.5,5.43],[18.6,5.55],[18.7,5.66],[18.8,5.78],[18.9,5.9],[19,6.01],[19.1,6.13],[19.2,6.24],[19.3,6.36],
+      [19.4,6.47],[19.5,6.59],[19.6,6.71],[19.7,6.82],[19.8,6.94],[19.9,7.05],[20,7.17],[20.1,7.28],[20.2,7.4],[20.3,7.51],
+      [20.4,7.63],[20.5,7.75],[20.6,7.86],[20.7,7.98],[20.8,8.09],[20.9,8.21],[21,8.32],[21.1,8.44],[21.2,8.55],[21.3,8.67],
+      [21.4,8.79],[21.5,8.9],[21.6,9.02],[21.7,9.13],[21.8,9.25],[21.9,9.36],[22,9.48]
+    ]
+  }
+};
+
+function getMerma(grano, humedadRecibo){
+  const g = MERMA[grano];
+  if(!g) return {porSecado:0, base:0, manipuleo:0, volatil:0, total:0};
+  const h = humedadRecibo;
+  let porSecado = 0;
+  // si humedad <= base, no hay merma por secado NI por manipuleo
+  if(h > g.base){
+    // busco fila más cercana <= h
+    for(let i=g.tabla.length-1; i>=0; i--){
+      if(g.tabla[i][0] <= h+0.0001){ porSecado = g.tabla[i][1]; break; }
+    }
+    // si es mayor al último, uso el último
+    if(porSecado===0 && h>=g.tabla[g.tabla.length-1][0]) porSecado = g.tabla[g.tabla.length-1][1];
+  }
+  // manipuleo solo se aplica cuando hay excedente sobre la base
+  const manipuleo = (h > g.base) ? g.manipuleo : 0;
+  const volatil = g.volatil;
+  const total = porSecado + manipuleo + volatil;
+  return {porSecado, base:g.base, manipuleo, volatil, total};
+}
+
+function getPuntosASecar(grano, humedadRecibo, puntosLibres){
+  const g = MERMA[grano];
+  if(!g || !humedadRecibo) return 0;
+  const excesoTotal = humedadRecibo - g.base;
+  if(excesoTotal <= 0) return 0;
+  // Los puntos libres se restan del excedente bruto (pueden ser fraccionarios)
+  // y luego se redondea hacia arriba al punto entero a cobrar.
+  // Ej: maíz base 14.5, humedad 16.1, libres 1.5 → exceso 1.6 - 1.5 = 0.1 → ceil = 1 punto
+  // Ej: soja base 13.5, humedad 13.6, libres 0 → exceso 0.1 → ceil = 1 punto
+  // Ej: soja base 13.5, humedad 14.5, libres 0 → exceso 1.0 → ceil = 1 punto
+  // Ej: soja base 13.5, humedad 14.6, libres 0 → exceso 1.1 → ceil = 2 puntos
+  const excesoNeto = excesoTotal - (puntosLibres||0);
+  if(excesoNeto <= 0) return 0;
+  return Math.ceil(excesoNeto - 0.0001); // tolerancia float
+}
+
+
+function f(n,d=2){return n.toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function ars(n){return '$ '+f(n);}
+function ars0(n){return '$ '+f(Math.round(n),0);}  // sin decimales (para montos grandes)
+function usd_(n){return 'u$s '+f(n);}
+function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
+
+// parseo de input con separador de miles es-AR (1.234,56)
+// también acepta formato con punto decimal (1.5, 14.5)
+function parseNum(str){
+  if(typeof str==='number')return str;
+  if(!str)return 0;
+  const s=String(str).trim();
+  let cleaned;
+  if(s.indexOf(',')>=0){
+    // formato es-AR: 1.234,56 — la coma es decimal y el punto es separador de miles
+    cleaned=s.replace(/\./g,'').replace(',','.');
+  } else {
+    const dots=(s.match(/\./g)||[]).length;
+    if(dots===1){
+      // un solo punto: ¿decimal o miles?
+      const [ent,dec]=s.split('.');
+      // si después del punto hay exactamente 3 dígitos y la parte entera tiene al menos un dígito,
+      // se interpreta como separador de miles (1.500 → 1500)
+      if(dec.length===3 && ent.length>=1){
+        cleaned=s.replace(/\./g,'');
+      } else {
+        // decimal (1.5, 14.5, 0.25, etc)
+        cleaned=s;
+      }
+    } else if(dots>1){
+      // varios puntos = separadores de miles (1.234.567)
+      cleaned=s.replace(/\./g,'');
+    } else {
+      cleaned=s;
+    }
+  }
+  const n=parseFloat(cleaned);
+  return isNaN(n)?0:n;
+}
+// parseFloat de un input
+function pv(id){return parseNum(document.getElementById(id).value);}
+
+function fmtInput(n){
+  if(n===0||isNaN(n))return '0';
+  // sin decimales si es entero, con decimales si no
+  const isInt=Math.abs(n-Math.round(n))<0.0001;
+  return n.toLocaleString('es-AR',{minimumFractionDigits:isInt?0:2,maximumFractionDigits:isInt?0:4});
+}
+
+function onNumInput(el){
+  // permitir números, coma, punto, signo menos
+  // durante edición dejar como está
+}
+function onNumBlur(el){
+  const n=parseNum(el.value);
+  el.value=fmtInput(n);
+  if(typeof calcular==='function')calcular();
+}
+function onNumFocus(el){
+  // al enfocar, mostrar valor raw (con coma decimal)
+  const n=parseNum(el.value);
+  if(n===0){el.value='';return;}
+  // versión editable: solo coma decimal, sin puntos de miles
+  const s=String(n).replace('.',',');
+  el.value=s;
+  el.select();
+}
+
+// ─── CATAC Abril 2026 $/tn (índice 1..1000) ──────────────────────────
+const CATAC=[0,
+  9636.69,9636.69,9636.69,9636.69,9636.69,9636.69,9636.69,9636.69,9636.69,9636.69,
+  9864.21,10096.66,10329.16,10566.63,10811.6,11061.6,11311.55,11571.56,11836.54,12103.99,
+  12331.51,12561.44,12801.43,13038.91,13286.39,13541.37,13798.86,14063.85,14336.33,14616.3,
+  14783.77,14953.75,15123.74,15296.24,15471.2,15646.22,15818.72,15996.2,16173.67,16356.13,
+  16536.12,16716.12,16901.09,17083.6,17271.08,17458.57,17648.57,17838.52,18031.04,18223.5,
+  18375.99,18528.47,18683.47,18838.47,18995.93,19150.93,19308.39,19465.9,19625.88,19785.85,
+  19948.35,20110.84,20273.33,20433.31,20600.83,20765.78,20933.25,21098.26,21270.76,21438.23,
+  21610.73,21780.72,21955.68,22130.7,22308.17,22483.14,22663.13,22840.61,23025.63,23205.57,
+  23390.6,23575.57,23763.05,23950.54,24140.49,24333.01,24525.47,24717.99,24915.43,25112.93,
+  25312.94,25515.41,25717.88,25922.87,26127.86,26335.31,26547.84,26760.33,26975.27,27192.78,
+  27320.27,27452.73,27585.26,27715.2,27845.21,27977.67,28107.68,28240.2,28372.67,28507.65,
+  28637.65,28770.12,28905.1,29035.1,29170.09,29302.61,29437.59,29572.57,29705.03,29837.56,
+  29972.54,30107.52,30242.5,30377.48,30514.98,30649.96,30784.94,30922.44,31057.42,31194.92,
+  31332.42,31467.4,31604.9,31742.39,31879.89,32019.85,32157.35,32294.84,32434.86,32572.3,
+  32714.83,32852.27,32992.29,33129.78,33272.26,33412.27,33552.23,33694.7,33834.72,33974.73,
+  34119.67,34259.68,34404.67,34544.68,34689.62,34832.15,34974.62,35117.1,35262.09,35404.56,
+  35552.07,35697.06,35839.53,35987.04,36132.03,36279.54,36424.53,36569.52,36716.97,36864.48,
+  37009.47,37159.43,37306.94,37454.45,37604.41,37754.38,37901.89,38051.85,38201.88,38351.84,
+  38501.81,38654.29,38804.32,38954.28,39106.77,39261.77,39414.25,39564.27,39716.76,39874.22,
+  40026.7,40179.18,40336.7,40489.18,40644.18,40801.64,40956.64,41114.1,41269.1,41426.61,
+  41569.09,41714.08,41861.53,42004.06,42149.05,42291.52,42439.03,42584.02,42731.47,42873.95,
+  43021.45,43168.96,43316.41,43461.4,43608.91,43756.41,43903.86,44051.37,44201.34,44346.33,
+  44496.35,44643.8,44793.83,44943.79,45093.82,45243.78,45393.75,45543.77,45693.74,45848.74,
+  45998.71,46151.19,46301.21,46453.69,46608.69,46758.66,46911.14,47063.63,47221.14,47373.63,
+  47526.11,47681.05,47836.05,47991.05,48148.57,48301.05,48455.99,48613.51,48773.49,48928.49,
+  49085.95,49243.46,49400.92,49558.44,49715.9,49875.87,50033.39,50193.36,50355.86,50515.83,
+  50673.35,50835.84,50995.82,51158.31,51318.28,51478.26,51640.75,51803.24,51968.25,52130.69,
+  52293.18,52458.19,52620.68,52788.15,52953.16,53118.11,53283.12,53450.59,53618.11,53783.06,
+  53950.59,54118.06,54288.04,54455.51,54625.5,54792.97,54960.49,55132.99,55300.46,55472.96,
+  55642.95,55815.39,55987.89,56157.88,56332.84,56505.34,56680.36,56852.8,57027.82,57202.78,
+  57330.27,57462.79,57592.74,57722.75,57852.75,57982.76,58112.7,58245.23,58372.71,58505.18,
+  58632.67,58765.19,58895.14,59025.14,59157.61,59287.61,59417.62,59547.62,59680.09,59812.55,
+  59942.56,60075.08,60205.03,60335.03,60467.5,60600.02,60730.02,60862.49,60994.96,61124.96,
+  61259.94,61392.46,61522.47,61654.93,61787.4,61919.92,62052.38,62184.91,62317.37,62452.35,
+  62582.36,62714.82,62849.8,62982.33,63114.79,63247.31,63382.29,63514.76,63649.74,63779.74,
+  63914.73,64049.71,64182.23,64317.21,64452.19,64584.71,64717.18,64852.16,64987.14,65122.12,
+  65257.16,65392.14,65527.12,65659.59,65792.11,65927.09,66062.07,66199.57,66334.55,66469.53,
+  66604.51,66739.5,66874.48,67007.0,67146.96,67279.48,67414.46,67554.42,67686.94,67821.92,
+  67959.42,68094.4,68231.9,68366.88,68504.38,68639.36,68779.37,68916.81,69051.79,69189.29,
+  69326.79,69461.77,69599.27,69736.77,69874.26,70011.76,70146.74,70284.24,70421.68,70559.18,
+  70659.21,70754.16,70849.16,70946.68,71041.68,71139.14,71234.14,71329.14,71426.61,71521.61,
+  71616.61,71714.13,71809.07,71904.07,72001.59,72096.59,72191.54,72291.57,72386.57,72484.04,
+  72579.04,72674.04,72771.5,72866.5,72961.5,73058.96,73153.97,73248.97,73346.49,73441.49,
+  73538.95,73633.95,73728.95,73828.93,73923.93,74016.42,74116.39,74211.4,74306.4,74403.86,
+  74498.86,74596.38,74691.38,74786.32,74883.84,74978.84,75073.85,75171.31,75266.31,75361.31,
+  75458.77,75553.77,75648.77,75748.75,75843.75,75941.27,76036.27,76131.22,76228.74,76323.74,
+  76418.74,76516.2,76611.2,76706.2,76803.67,76898.67,76993.67,77091.19,77186.13,77281.13,
+  77381.11,77476.11,77568.6,77668.63,77763.58,77858.58,77956.1,78051.1,78146.1,78243.56,
+  78338.56,78433.56,78531.03,78626.03,78721.03,78818.49,78913.49,79008.49,79106.01,79201.01,
+  79295.96,79395.99,79490.94,79585.94,79683.46,79778.46,79873.4,79970.92,80065.92,80160.92,
+  80220.92,80283.38,80340.92,80403.38,80463.37,80520.86,80583.37,80643.37,80703.37,80763.36,
+  80820.85,80883.36,80940.84,81003.36,81060.84,81118.32,81180.83,81238.32,81295.8,81358.31,
+  81415.79,81473.27,81535.79,81593.27,81650.81,81710.81,81768.29,81825.77,81885.77,81945.77,
+  82003.25,82063.25,82120.73,82178.26,82235.75,82295.74,82350.71,82408.25,82465.73,82525.73,
+  82583.21,82640.69,82695.71,82753.19,82813.19,82870.67,82925.7,82983.18,83043.18,83098.14,
+  83155.68,83213.16,83268.13,83325.66,83383.15,83440.63,83495.65,83553.13,83608.1,83663.12,
+  83723.11,83778.14,83833.1,83890.58,83945.61,84000.57,84058.11,84113.07,84168.1,84223.06,
+  84278.08,84338.08,84393.05,84448.07,84503.03,84558.05,84613.02,84668.04,84723.01,84778.03,
+  84833.05,84888.01,84943.04,84998.0,85053.02,85105.47,85160.49,85215.52,85270.48,85325.5,
+  85377.95,85432.97,85487.99,85540.44,85595.47,85650.43,85702.94,85757.96,85812.92,85865.43,
+  85920.45,85972.95,86027.92,86080.43,86135.39,86187.9,86237.89,86295.42,86345.41,86400.38,
+  86452.88,86505.39,86560.35,86612.86,86665.36,86717.87,86772.89,86822.88,86875.33,86927.83,
+  86980.34,87032.84,87085.35,87135.34,87190.3,87242.81,87295.31,87347.82,87400.33,87452.83,
+  87500.3,87552.81,87605.31,87657.76,87707.81,87760.26,87812.76,87865.27,87915.26,87965.25,
+  88017.75,88070.26,88120.24,88170.23,88222.74,88272.73,88325.23,88372.71,88425.21,88477.72,
+  88527.71,88577.69,88627.68,88680.19,88727.72,88780.22,88830.21,88882.72,88930.19,88980.18,
+  89032.68,89080.16,89130.15,89182.65,89230.18,89280.17,89332.67,89380.15,89430.14,89480.12,
+  89527.65,89580.16,89630.15,89677.62,89727.61,89775.14,89825.13,89875.12,89922.59,89972.58,
+  90020.11,90070.1,90120.08,90167.56,90217.6,90265.07,90315.06,90365.05,90412.58,90460.05,
+  90507.58,90557.57,90605.04,90655.03,90700.05,90750.03,90797.51,90845.04,90892.51,90942.5,
+  91015.02,91090.0,91162.53,91237.51,91307.46,91379.99,91454.97,91527.49,91599.96,91674.94,
+  91747.47,91817.47,91892.46,91964.92,92039.91,92109.91,92182.44,92257.42,92327.43,92399.9,
+  92474.88,92544.89,92617.41,92692.39,92762.34,92834.87,92904.87,92979.86,93049.86,93122.33,
+  93192.34,93267.32,93337.33,93407.34,93482.32,93552.33,93624.79,93694.8,93767.27,93839.79,
+  93909.8,93979.75,94054.79,94124.74,94194.75,94264.75,94334.76,94409.74,94479.75,94549.7,
+  94619.71,94689.72,94762.18,94834.71,94904.71,94974.66,95047.19,95117.19,95187.14,95257.15,
+  95327.16,95397.17,95469.63,95539.64,95607.13,95677.14,95747.14,95817.1,95887.1,95959.63,
+  96029.58,96097.12,96167.07,96237.08,96307.09,96377.1,96444.59,96517.05,96587.06,96654.55,
+  96724.56,96794.56,96862.06,96932.01,97002.01,97069.5,97139.51,97207.0,97279.53,97347.02,
+  97416.97,97484.46,97554.46,97621.96,97691.96,97759.45,97826.94,97896.95,97964.44,98034.45,
+  98086.95,98141.92,98194.42,98246.93,98301.89,98354.4,98409.42,98459.41,98511.92,98566.88,
+  98619.39,98674.41,98726.86,98779.36,98834.38,98886.89,98939.34,98989.38,99044.35,99096.85,
+  99149.36,99201.86,99254.31,99309.34,99361.84,99411.83,99464.33,99516.84,99569.29,99624.31,
+  99676.82,99729.32,99779.31,99831.82,99884.26,99936.77,99989.28,100041.78,100091.77,100144.27,
+  100196.78,100249.23,100301.73,100351.72,100404.23,100456.73,100509.24,100561.74,100614.25,100661.72,
+  100714.23,100766.73,100819.18,100871.69,100921.68,100971.72,101024.17,101076.68,101126.66,101179.17,
+  101229.16,101281.66,101331.65,101381.64,101434.15,101486.65,101534.12,101586.63,101639.14,101689.12,
+  101739.11,101791.62,101841.61,101894.11,101941.64,101994.09,102046.6,102096.58,102146.57,102196.62,
+  102249.07,102296.6,102349.1,102399.09,102451.6,102499.07,102549.06,102601.56,102649.04,102701.54,
+  102751.53,102799.06,102851.56,102901.55,102954.06,103001.53,103051.52,103104.03,103151.5,103201.49,
+  103249.02,103301.52,103351.51,103398.98,103448.97,103501.48,103549.01,103598.99,103648.98,103696.46,
+  103746.45,103798.95,103846.48,103896.47,103943.94,103993.93,104043.92,104091.45,104141.44,104188.91,
+  104238.9,104291.4,104338.93,104388.92,104438.91,104486.38,104536.43,104583.9,104631.37,104678.9,
+  104728.89,104778.88,104826.35,104876.4,104923.87,104973.86,105023.85,105071.38,105118.85,105166.32,
+  105216.37,105263.84,105313.83,105358.84,105408.83,105458.82,105506.35,105556.34,105601.29,105651.28,
+  105698.81,105746.28,105793.81,105843.8,105888.81,105938.8,105986.28,106033.81,106081.28,106131.27,
+  106176.28,106226.27,106276.26,106321.27,106371.26,106416.27,106466.26,106511.22,106561.26,106608.73,
+  106656.21,106703.74,106751.21,106798.74,106843.69,106893.68,106938.7,106988.68,107033.7,107081.17,
+  107128.7,107176.17,107223.7,107271.17,107316.18,107366.17,107411.19,107456.14,107506.13,107551.14,
+  107598.67,107646.15,107693.62,107738.63,107788.62,107833.63,107881.11,107926.12,107976.11,108021.12
+];
+
+// ─── Motor liquidación ───────────────────────────────────────────────
+function liq(k,tipo,p){
+  const ec=tipo==='canje';
+  // k = kilos brutos entregados. Se liquida sobre netos (descontada la merma)
+  const mermaFrac = (p.merma ? p.merma.total : 0) / 100;
+  const kNeto = k * (1 - mermaFrac);
+  const bruto=kNeto*p.precio*p.tc*p.factor;
+  const total=bruto*1.105;
+  const cb=bruto*(p.comPct/100),ct=cb*1.105;
+  const sel=ct*0.0105,der=bruto*0.006,hon=915*kNeto*1.105;
+  const td=ct+sel+der+hon;
+  const ri=ec?0:p.rog?(bruto-ct)*0.05:(bruto-ct)*0.105;
+  const rib=bruto*0.0075;
+  const rg=ec?0:!p.rog?Math.max(0,(bruto-ct-MNI)*0.15):Math.max(0,(bruto-ct-MNI)*0.02);
+  const tr=ri+rib+rg;
+  const tp=total-td-tr-rib;
+  const cbu=p.rog?(bruto-ct)*0.025:0;
+  return{bruto,total,cb,ct,sel,der,hon,td,ri,rib,rg,tr,tp,cbu,imp:tp-cbu,kNeto,kBruto:k};
+}
+
+function getP(){
+  const grano = document.getElementById('grano').value;
+  const humRec = pv('hum_recibo')||0;
+  const puntosLibres = pv('puntos_libres')||0;
+  const mermaInfo = getMerma(grano, humRec);
+  const tc = pv('tc')||0;
+  const tcVend = pv('tc_vendedor')||tc;
+  // precio: si el toggle está en $ lo paso a USD/tn dividiendo por TC vendedor
+  const precioRaw = pv('precio')||0;
+  const precioCurEl = document.getElementById('precio_curr');
+  const precioCur = precioCurEl ? precioCurEl.dataset.curr : 'usd';
+  const precioUSD = precioCur==='ars' ? (tcVend>0 ? precioRaw/tcVend : 0) : precioRaw;
+  return{
+    tc,
+    precio: precioUSD,
+    precioCur,
+    precioRaw,
+    factor:(pv('factor')||0)/100,
+    comPct:pv('com')||0,
+    rog:   document.getElementById('rog').checked,
+    grano,
+    humRec,
+    puntosLibres,
+    merma: mermaInfo,        // {porSecado, base, manipuleo, volatil, total}
+    puntosASecar: getPuntosASecar(grano, humRec, puntosLibres)
+  };
+}
+
+// ─── Flete corto / salida ──────────────────────────────────
+const fleteModos = { corto:'tarifa', salida:'tarifa' };
+const fleteIdMap = { corto:'flete_corto', salida:'flete_largo' };
+// flete largo puede ser 'largo' (sobre kNeto) o 'directo' (sobre kBruto)
+let fleteLargoTipo = 'largo';
+
+function setFleteTipo(t){
+  fleteLargoTipo = t;
+  document.querySelectorAll('.flete-block[data-flete="salida"] .ftipo-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.ftipo===t);
+  });
+  // El título siempre es "Flete" — lo que cambia es solo el botón seleccionado
+  const title = document.getElementById('flete_largo_title');
+  if(title) title.textContent = 'Flete';
+  if(typeof calcular==='function') calcular();
+  if(typeof scheduleSave==='function') scheduleSave();
+}
+
+function setFleteModo(flete, m){
+  fleteModos[flete] = m;
+  // botones
+  document.querySelectorAll(`.flete-block[data-flete="${flete}"] .fmodo-btn`).forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.fmodo===m);
+  });
+  // bodies (tarifa/km) — ocultar uno y mostrar el otro
+  const block = document.querySelector(`.flete-block[data-flete="${flete}"]`);
+  if(!block) return;
+  const fbTarifa = block.querySelector('.fb-tarifa');
+  const fbKm     = block.querySelector('.fb-km');
+  if(fbTarifa) fbTarifa.style.display = (m==='tarifa') ? 'flex' : 'none';
+  if(fbKm)     fbKm.style.display     = (m==='km')     ? 'grid' : 'none';
+  actualizarKmTarifa(flete);
+  if(typeof calcular==='function') calcular();
+}
+
+function actualizarKmTarifa(flete){
+  const id = fleteIdMap[flete];
+  const km = parseInt(pv('g_'+id+'_km'))||0;
+  const aj = pv('g_'+id+'_aj')||0;
+  const disp = document.getElementById('g_'+id+'_calc');
+  if(!disp) return;
+  if(km>=1 && km<=1000){
+    const base = CATAC[km] || 0;
+    const tarifa = base * (1 + aj/100);
+    disp.textContent = '$ '+f(tarifa,2)+'/tn';
+  } else {
+    disp.textContent = '—';
+  }
+}
+function actualizarTodasKmTarifas(){
+  ['corto','salida'].forEach(actualizarKmTarifa);
+}
+
+// Devuelve $/tn en ARS (usa TC vendedor para USD)
+function getFleteARS(flete, tc){
+  const id = fleteIdMap[flete];
+  if(fleteModos[flete]==='km'){
+    const km=parseInt(pv('g_'+id+'_km'))||0;
+    const aj=pv('g_'+id+'_aj')||0;
+    if(km>=1 && km<=1000) return (CATAC[km]||0) * (1 + aj/100);
+    return 0;
+  }
+  const v=pv('g_'+id)||0;
+  const cur=document.getElementById('g_'+id+'_curr')?.dataset.curr || 'ars';
+  const tcV=pv('tc_vendedor')||tc||0;
+  return cur==='usd' ? v*tcV : v;
+}
+
+// Compatibilidad con código viejo
+let fcModo='tarifa';
+function setFCModo(m){ setFleteModo('corto', m==='tar'?'tarifa':'km'); fcModo=m; }
+function getFleteCortoARS(tc){ return getFleteARS('corto', tc); }
+function ajKm(delta){
+  const el=document.getElementById('g_flete_corto_km');
+  if(!el) return;
+  el.value=Math.max(1,Math.min(1000,(parseInt(el.value)||0)+delta));
+  actualizarKmTarifa('corto');
+  calcular();
+}
+
+// Stepper para Ajuste % en fletes (corto y largo)
+function ajustarPct(id, delta){
+  const el = document.getElementById('g_'+id+'_aj');
+  if(!el) return;
+  const cur = parseNum(el.value) || 0;
+  const nuevo = Math.max(-99, Math.min(999, cur + delta));
+  // mantiene decimales si ya los tenía
+  el.value = fmtInput(nuevo);
+  const flete = id==='flete_corto' ? 'corto' : 'salida';
+  actualizarKmTarifa(flete);
+  calcular();
+  if(typeof scheduleSave==='function') scheduleSave();
+}
+
+// ─── Gastos detalle ───────────────────────────────────────────────
+// Salida de planta (ex flete largo) → sobre kNeto. Resto → sobre kBruto.
+function gastosDetalle(kBruto, kNeto, p){
+  const tc = pv('tc')||0;
+  const tcV = pv('tc_vendedor')||tc;
+  // base por concepto en $/tn (USD pesificado con TC vendedor)
+  function valor(id){
+    const v = pv('g_'+id)||0;
+    const curEl = document.getElementById('g_'+id+'_curr');
+    const cur = curEl ? curEl.dataset.curr : 'ars';
+    return cur==='usd' ? v*tcV : v;
+  }
+  const paritariasTn = valor('paritarias');
+  const fumigadaTn   = valor('fumigada');
+  const fcTn         = getFleteARS('corto', tc);
+  const slTn         = getFleteARS('salida', tc);  // salida de planta (ex flete largo)
+  const secadaPorPunto = valor('secada');
+  const puntos = p ? p.puntosASecar : 0;
+
+  const paritariasMonto = paritariasTn * kBruto;
+  const fumigadaMonto   = fumigadaTn   * kBruto;
+  const fcMonto         = fcTn         * kBruto;
+  const slMonto         = slTn         * (fleteLargoTipo==='directo' ? kBruto : kNeto);  // directo: bruto, largo: neto
+  const secadaMonto     = secadaPorPunto * puntos * kBruto;
+
+  const subtotal = paritariasMonto + fumigadaMonto + fcMonto + slMonto + secadaMonto;
+  const iva = subtotal * 0.21;
+  const total = subtotal + iva;
+  return {
+    total, subtotal, iva,
+    detalle:{
+      paritarias:   {tn:paritariasTn, monto:paritariasMonto, base:'bruto'},
+      fumigada:     {tn:fumigadaTn,   monto:fumigadaMonto,   base:'bruto'},
+      secada:       {tn:secadaPorPunto, monto:secadaMonto, base:'bruto', puntos, porPunto:secadaPorPunto},
+      flete_corto:  {tn:fcTn, monto:fcMonto, base:'bruto'},
+      flete_largo:  {tn:slTn, monto:slMonto, base: fleteLargoTipo==='directo' ? 'bruto' : 'neto'}
+    }
+  };
+}
+
+// Compatibilidad: retorna $/tn promedio equivalente usando k=1 de prueba
+function gastosPorTn(){
+  const tcV=pv('tc_vendedor')||pv('tc')||0;
+  let t=0;
+  ['paritarias','flete_corto','flete_largo'].forEach(c=>{
+    const v=pv('g_'+c)||0;
+    const cur=document.getElementById('g_'+c+'_curr').dataset.curr;
+    t+=cur==='usd'?v*tcV:v;
+  });
+  // secada aproximada (necesita p)
+  return t;
+}
+
+// ─── Toggle moneda ───────────────────────────────────────────────────
+function toggleCurr(id){
+  const btn=document.getElementById(id+'_curr'),cur=btn.dataset.curr;
+  if(cur==='usd'){
+    btn.dataset.curr='ars';btn.textContent='$/tn';
+    btn.classList.remove('active');btn.classList.add('active-green');
+  }else{
+    btn.dataset.curr='usd';btn.textContent='USD/tn';
+    btn.classList.remove('active-green');btn.classList.add('active');
+  }
+  calcular();
+}
+
+// ─── Modo / Dest ─────────────────────────────────────────────────────
+let modo='importe', dest='auto';
+
+function setModo(m){
+  modo=m;
+  document.getElementById('mode_importe').classList.toggle('active',m==='importe');
+  document.getElementById('mode_kilos').classList.toggle('active',m==='kilos');
+  document.getElementById('kilos_inputs').style.display=m==='kilos'?'':'none';
+  // mostrar/ocultar secciones de deuda+importe según modo
+  document.querySelectorAll('.sec-importe-only').forEach(s=>{
+    s.style.display = m==='importe' ? '' : 'none';
+  });
+  calcular();
+}
+
+function setDest(d){
+  dest=d;
+  ['auto','canje','pago'].forEach(x=>
+    document.getElementById('dest_'+x).classList.toggle('active',x===d));
+  calcular();
+}
+
+// ─── Bisección ───────────────────────────────────────────────────────
+function bisect(target,tipo,p,gpTn,plusUSD,plusARStn,deudaFija=0){
+  let lo=0,hi=1e9,k;
+  for(let i=0;i<80;i++){
+    k=(lo+hi)/2;
+    const r=liq(k,tipo,p);
+    const plus=plusARStn>0?k*plusARStn:k*plusUSD*p.tc;
+    const neto=r.tp+plus;
+    const costo=k*gpTn*1.21+deudaFija;
+    if(neto<(target>0?target:costo)) lo=k; else hi=k;
+  }
+  return k;
+}
+
+// ─── Render liquidación ───────────────────────────────────────────────
+function renderLiq(pfx,k,tipo,p,plusUSD,plusARStn){
+  const r=liq(k,tipo,p);
+  const tc=p.tc;
+  const plusARS=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+  set(pfx+'_precio_ars',ars(p.precio*tc));
+  set(pfx+'_kilos',f(k,3)+' tn');
+  set(pfx+'_bruto',ars(r.bruto));
+  set(pfx+'_iva',ars(r.bruto*0.105));
+  set(pfx+'_total',ars(r.total));
+  document.getElementById(pfx+'_com_pct').textContent=p.comPct;
+  set(pfx+'_com_det',ars(r.cb)+' + IVA '+ars(r.cb*0.105));
+  set(pfx+'_com',ars(r.ct));
+  set(pfx+'_sellos',ars(r.sel));
+  set(pfx+'_derecho',ars(r.der));
+  set(pfx+'_honorarios',ars(r.hon));
+  set(pfx+'_total_ded',ars(r.td));
+  if(pfx==='p'){
+    set('p_ret_iva',ars(r.ri));
+    set('p_iva_lbl',p.rog?'5% Bruto–Com (ROG)':'10,5% Bruto–Com');
+    set('p_ganancias',ars(r.rg));
+    set('p_gan_lbl',!p.rog?'15% Bruto–Com–MNI':'2% Bruto–Com–MNI');
+  }
+  set(pfx+'_iibb',ars(r.rib));
+  set(pfx+'_total_ret',ars(r.tr));
+  set(pfx+'_total_pagar',ars(r.tp));
+  set(pfx+'_total_pagar_usd',usd_(r.tp/tc));
+  const rcbu=document.getElementById(pfx+'_row_cbu');
+  if(rcbu)rcbu.style.display=p.rog?'':'none';
+  if(p.rog)set(pfx+'_cbu_rog',ars(r.cbu));
+  set(pfx+'_importe_pagar',ars(r.imp));
+  set(pfx+'_importe_pagar_usd',usd_(r.imp/tc));
+  set(pfx+'_plus_ars',ars(plusARS));
+  const tp2=r.tp+plusARS;
+  set(pfx+'_total_plus',ars(tp2));
+  set(pfx+'_total_plus_usd',usd_(tp2/tc));
+}
+
+// ─── Cálculo principal ────────────────────────────────────────────────
+function calcular(){
+  const p=getP();
+  // actualizar display de base de humedad según grano
+  const baseDisp = document.getElementById('hum_base_display');
+  if(baseDisp && p.merma) baseDisp.textContent = 'base '+f(p.merma.base,1)+'%';
+  const tc=p.tc;
+  const tcV=pv('tc_vendedor')||tc;
+  const plusUSD=pv('plus_usd')||0;
+  const plusARStn=pv('plus_ars_input')||0;
+  // Deuda USD → TC VENDEDOR · Cobrar USD → TC COMPRADOR
+  const deudaARS=(pv('deuda_usd')||0)*tcV
+                +(pv('deuda_ars')||0);
+  const cobrarARS=(pv('cobrar_usd')||0)*tc
+                 +(pv('cobrar_ars')||0);
+  const gpTn=gastosPorTn();
+
+  const mermaFrac = (p.merma?p.merma.total:0)/100;
+  function gastosFor(k){ return gastosDetalle(k, k*(1-mermaFrac), p).total; }
+
+  let Kc,Kp;
+
+  if(modo==='kilos'){
+    const Kt=pv('k_total')||0;
+    if(dest==='canje'){Kc=Kt;Kp=0;}
+    else if(dest==='pago'){Kc=0;Kp=Kt;}
+    else{
+      // auto: bisect Kc en [0,Kt] para cubrir gastos de Kt + deuda
+      const gTot = gastosFor(Kt);
+      let lo=0,hi=Kt,k;
+      for(let i=0;i<80;i++){
+        k=(lo+hi)/2;
+        const r=liq(k,'canje',p);
+        const plus=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+        if(r.tp+plus<gTot+deudaARS) lo=k; else hi=k;
+      }
+      Kc=k; Kp=Math.max(0,Kt-Kc);
+    }
+  } else {
+    // por importe
+    if(cobrarARS>0){
+      let lo=0,hi=1e9,k;
+      for(let i=0;i<80;i++){
+        k=(lo+hi)/2;
+        const r=liq(k,'pago',p);
+        const plus=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+        if(r.tp+plus<cobrarARS) lo=k; else hi=k;
+      }
+      Kp=k;
+    } else {Kp=0;}
+    // gastos del pago + deuda
+    const gfPago = gastosFor(Kp) * (Kp>0?1:0);
+    const gf = gfPago + deudaARS;
+    let lo=0,hi=1e9,k;
+    for(let i=0;i<80;i++){
+      k=(lo+hi)/2;
+      const r=liq(k,'canje',p);
+      const plus=plusARStn>0?k*plusARStn:k*plusUSD*tc;
+      // canje debe cubrir gastos(Kc) + gf
+      if(r.tp+plus<gastosFor(k)+gf) lo=k; else hi=k;
+    }
+    Kc=k;
+  }
+
+  document.getElementById('op_result_head').textContent=
+    modo==='kilos'?'Resultado por kilos':'Kilos necesarios';
+
+  const rc=liq(Kc,'canje',p);
+  const rp=liq(Kp,'pago',p);
+  const plusC=plusARStn>0?Kc*plusARStn:Kc*plusUSD*tc;
+  const plusP=plusARStn>0?Kp*plusARStn:Kp*plusUSD*tc;
+  const gastosTotal = gastosFor(Kc) + gastosFor(Kp);
+  const netoC=rc.tp+plusC;
+  const netoP=rp.tp+plusP;
+
+  // Resultado cols
+  set('kr_c_kilos',f(Kc,3));
+  set('kr_c_kilos_neto', mermaFrac>0 ? f(Kc*(1-mermaFrac),3)+' tn' : f(Kc,3)+' tn (sin merma)');
+  set('kr_c_gastos',ars(gastosTotal));
+  set('kr_c_deuda',ars(deudaARS));
+  set('kr_c_total',ars(gastosTotal+deudaARS));
+  set('kr_c_neto',ars(netoC));
+  const mp=Kp>0;
+  set('kr_p_kilos', mp?f(Kp,3):'—');
+  set('kr_p_kilos_neto', mp ? (mermaFrac>0 ? f(Kp*(1-mermaFrac),3)+' tn' : f(Kp,3)+' tn (sin merma)') : '—');
+  set('kr_p_cobrar',mp?ars(netoP):'—');
+  set('kr_p_neto',  mp?ars(netoP):'—');
+  const ktotBruto = Kc+(mp?Kp:0);
+  const ktotNeto = ktotBruto*(1-mermaFrac);
+  set('kr_total_kilos',f(ktotBruto,3)+' tn');
+
+  // ─── Visor permanente (estilo Kilos necesarios) ───────────────────
+  set('home_kc', f(Kc,3)+' tn');
+  set('home_kp', mp ? f(Kp,3)+' tn' : '—');
+  set('home_kc_neto', mermaFrac>0 && Kc>0 ? 'neto '+f(Kc*(1-mermaFrac),3)+' tn' : (Kc>0?'sin merma':'—'));
+  set('home_kp_neto', mp && mermaFrac>0 ? 'neto '+f(Kp*(1-mermaFrac),3)+' tn' : (mp?'sin merma':'—'));
+  set('home_total_kilos', f(ktotBruto,3)+' tn');
+  // gastos: en canje se muestran los gastos totales (canje cubre todo lo que se canjea)
+  set('home_kc_gastos', ars0(gastosTotal));
+  set('home_kc_deuda',  ars0(deudaARS));
+  set('home_kc_total',  ars0(gastosTotal+deudaARS));
+  set('home_kc_lq',     ars0(netoC));
+  set('home_kp_cobrar', mp?ars0(netoP):'—');
+  set('home_kp_lq',     mp?ars0(netoP):'—');
+  // total neto (mostrar/ocultar)
+  const homeNetoRow = document.getElementById('home_neto_row');
+  if(homeNetoRow){
+    if(mermaFrac>0 && ktotBruto>0){
+      homeNetoRow.style.display='';
+      set('home_total_neto', f(ktotNeto,3)+' tn');
+    } else {
+      homeNetoRow.style.display='none';
+    }
+  }
+  // fila neto total (legacy)
+  const kNetoRow = document.getElementById('kr_neto_row');
+  if(mermaFrac>0 && ktotBruto>0){
+    kNetoRow.style.display='';
+    set('kr_total_neto', f(ktotNeto,3)+' tn');
+  } else {
+    kNetoRow.style.display='none';
+  }
+
+  // Analytics
+  const base=netoC+netoP;
+  const gastosDeuda=gastosTotal+deudaARS;
+  const anDiv=document.getElementById('kr_analytics');
+  if(base>0){
+    anDiv.style.display='';
+    const pN=v=>base>0?f(v/base*100,1)+'%':'0%';
+    const cd=modo==='kilos'?dest:'auto';
+    document.getElementById('kr_analytics_title').textContent='Sobre el total neto recibido';
+    set('an_base',ars(base));
+    document.getElementById('an_base_det').textContent=
+      netoC>0&&netoP>0?ars(netoC)+' + '+ars(netoP):'';
+
+    function barra(label,valor,color,nota=''){
+      const pct=base>0?Math.min(100,Math.abs(valor)/base*100):0;
+      return`<div class="an-item">
+        <div class="an-row">
+          <span class="an-label">${label}${nota?`<small style="color:var(--muted);display:block">${nota}</small>`:''}</span>
+          <span style="text-align:right;flex-shrink:0">
+            <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:${color}">${pN(valor)}</span>
+            <small style="display:block;color:var(--muted);font-size:10px">${ars(valor)}</small>
+          </span>
+        </div>
+        <div class="an-bar-track" style="margin-top:4px"><div style="height:100%;width:${pct}%;background:${color};border-radius:3px"></div></div>
+      </div>`;
+    }
+
+    let html='';
+    if(cd==='auto'||modo==='importe'){
+      html+=barra('Gastos + deuda',gastosDeuda,'var(--red)','se cancelan en canje');
+      html+=barra('Lo que recibís',base-gastosDeuda,(base-gastosDeuda)>=0?'var(--green)':'var(--red)');
+    }else if(cd==='canje'){
+      html+=barra('Gastos + deuda',gastosDeuda,'var(--red)');
+      html+=barra('Saldo cta. corriente',netoC-gastosDeuda,'var(--purple)','no cobrable en efectivo');
+    }else{
+      html+=barra('Gastos + deuda',gastosDeuda,'var(--red)','sin beneficio canje');
+      html+=barra('Lo que recibís',netoP-gastosDeuda,(netoP-gastosDeuda)>=0?'var(--green)':'var(--red)');
+    }
+    document.getElementById('kr_analytics_bars').innerHTML=html;
+  }else{anDiv.style.display='none';}
+
+  renderLiq('c',Kc,'canje',p,plusUSD,plusARStn);
+  renderLiq('p',Kp,'pago', p,plusUSD,plusARStn);
+
+  // RESUMEN
+  const fecha=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'});
+  set('res_fecha',fecha);
+  set('res_kilos',f(Kc+Kp,3));
+  const gLbl={soja:'Soja',maiz:'Maíz',trigo:'Trigo',cebada:'Cebada',girasol:'Girasol'}[p.grano]||'—';
+  set('res_grano', gLbl+(p.merma?' · base '+f(p.merma.base,1)+'%':''));
+  set('res_tc','$ '+f(tc,2));
+  if(p.precioCur==='ars'){
+    set('res_precio','$ '+f(p.precioRaw,2)+'/tn  ·  u$s '+f(p.precio,2)+'/tn');
+  } else {
+    set('res_precio','u$s '+f(p.precio,2)+'/tn  ·  $ '+f(p.precio*tc,2)+'/tn');
+  }
+  set('res_com',p.comPct+'%  ·  '+(p.rog?'ROG activo':'Sin ROG'));
+  if(plusUSD>0||plusARStn>0){
+    document.getElementById('res_plus_row').style.display='';
+    set('res_plus',(plusUSD>0?'u$s '+f(plusUSD,2)+'/tn':'')+(plusARStn>0?' $ '+f(plusARStn,0)+'/tn':''));
+  } else {
+    document.getElementById('res_plus_row').style.display='none';
+  }
+
+  // Mermas
+  const mermasCard=document.getElementById('res_mermas_card');
+  if(p.humRec>0 && p.merma.total>0){
+    mermasCard.style.display='';
+    const Ktn = Kc+Kp;
+    const Kkg = Ktn * 1000;
+    const fisicaPct = p.merma.porSecado + p.merma.manipuleo;
+    const kgFisica = Kkg * (fisicaPct/100);
+    const kgVol    = Kkg * (p.merma.volatil/100);
+    const kgTotal  = Kkg * (p.merma.total/100);
+    set('res_hum_recibo', f(p.humRec,1)+'%');
+    set('res_m_secado', f(kgFisica,0)+' kg  ·  '+f(fisicaPct,2)+'%');
+    set('res_secado_lbl', 'Merma física (hum '+f(p.humRec,1)+'% vs base '+f(p.merma.base,1)+'%)');
+    set('res_m_volatil', f(kgVol,0)+' kg  ·  '+f(p.merma.volatil,2)+'%');
+    set('res_m_total',   f(kgTotal,0)+' kg  ·  '+f(p.merma.total,2)+'%');
+    if(p.puntosASecar>0){
+      document.getElementById('res_puntos_row').style.display='';
+      set('res_puntos_secar', f(p.puntosASecar,2)+' pt'+(p.puntosLibres>0?' (con '+f(p.puntosLibres,1)+' pt libres)':''));
+    } else {
+      document.getElementById('res_puntos_row').style.display='none';
+    }
+  } else {
+    mermasCard.style.display='none';
+  }
+
+  set('res_canje_kilos',f(Kc,3)+' tn');
+  set('res_canje_neto', f(Kc*(1-mermaFrac),3)+' tn');
+  if(plusC>0){document.getElementById('res_canje_plus_row').style.display='';set('res_canje_plus',ars(plusC));}
+  else{document.getElementById('res_canje_plus_row').style.display='none';}
+  set('res_canje_total',ars(netoC));
+
+  set('res_pago_kilos',f(Kp,3)+' tn');
+  set('res_pago_neto', f(Kp*(1-mermaFrac),3)+' tn');
+  if(plusP>0){document.getElementById('res_pago_plus_row').style.display='';set('res_pago_plus',ars(plusP));}
+  else{document.getElementById('res_pago_plus_row').style.display='none';}
+  set('res_pago_total',ars(netoP));
+
+  // Detalle gastos — usa gastosDetalle sobre kilos totales
+  const Ktot=Kc+Kp;
+  const Kneto = Ktot * (1 - mermaFrac);
+  const det = gastosDetalle(Ktot, Kneto, p);
+
+  const slKfor   = fleteLargoTipo==='directo' ? Ktot : Kneto;
+  const slLabel  = fleteLargoTipo==='directo' ? 'Flete directo' : 'Flete';
+  const slBase   = fleteLargoTipo==='directo' ? 'bruto' : 'neto';
+
+  const itemDefs = [
+    {id:'paritarias',   kFor:Ktot,    label:'Paritarias',     lblBase:'bruto'},
+    {id:'fumigada',     kFor:Ktot,    label:'Fumigada',       lblBase:'bruto'},
+    {id:'secada',       kFor:Ktot,    label:'Secada',         lblBase:'bruto', secada:true},
+    {id:'flete_corto',  kFor:Ktot,    label:'Flete corto',    lblBase:'bruto', flete:'corto'},
+    {id:'flete_largo',  kFor:slKfor,  label:slLabel,          lblBase:slBase,  flete:'salida'},
+  ];
+  itemDefs.forEach(it=>{
+    const valUSDorARS = pv('g_'+it.id)||0;
+    const curEl = document.getElementById('g_'+it.id+'_curr');
+    const cur = curEl ? curEl.dataset.curr : 'ars';
+    const row = document.getElementById('res_g_'+it.id+'_row');
+    if(!row) return;
+    const monto = det.detalle[it.id].monto;
+    // si es flete_largo, actualizar label dinámico
+    if(it.id==='flete_largo'){
+      const lbl = document.getElementById('res_g_flete_largo_lbl');
+      if(lbl) lbl.textContent = it.label;
+    }
+    if(monto > 0){
+      row.style.display='';
+      set('res_g_'+it.id, ars(monto));
+      let detTxt;
+      if(it.secada){
+        const pts = p.puntosASecar;
+        detTxt = (cur==='usd'?'u$s '+f(valUSDorARS,2):'$ '+f(valUSDorARS,0))+'/pt × '+f(pts,2)+' pt × '+f(it.kFor,3)+' tn';
+      } else if(it.flete && fleteModos[it.flete]==='km'){
+        // modo km: muestra km y ajuste
+        const km = parseInt(pv('g_'+it.id+'_km'))||0;
+        const aj = pv('g_'+it.id+'_aj')||0;
+        const tarifa = det.detalle[it.id].tn;
+        detTxt = km+' km · '+(aj>0?'+':'')+f(aj,1)+'%  →  $ '+f(tarifa,2)+'/tn × '+f(it.kFor,3)+' tn '+it.lblBase;
+      } else {
+        detTxt = (cur==='usd'?'u$s '+f(valUSDorARS,2):'$ '+f(valUSDorARS,0))+'/tn × '+f(it.kFor,3)+' tn '+it.lblBase;
+      }
+      set('res_g_'+it.id+'_det', detTxt);
+    } else {
+      row.style.display='none';
+    }
+  });
+  set('res_g_subtotal', ars(det.subtotal));
+  set('res_g_iva', ars(det.iva));
+
+  set('res_gastos',ars(gastosTotal));
+
+  // Deducciones de la liquidación (suma canje+pago)
+  const dCom    = rc.cb  + rp.cb;       // comisión base
+  const dComIVA = rc.ct  + rp.ct;       // comisión + IVA 10.5%
+  const dSel    = rc.sel + rp.sel;
+  const dDer    = rc.der + rp.der;
+  const dHon    = rc.hon + rp.hon;
+  const dTotal  = rc.td  + rp.td;
+  set('res_d_comision', ars(dComIVA));
+  set('res_d_comision_det', p.comPct+'% del bruto + IVA');
+  set('res_d_sellos',   ars(dSel));
+  set('res_d_derecho',  ars(dDer));
+  set('res_d_honorarios', ars(dHon));
+  set('res_d_total',    ars(dTotal));
+
+  // Retenciones de la liquidación (suma canje+pago — canje no tiene IVA ret ni Gan)
+  const rIVA = rc.ri  + rp.ri;     // IVA ret (canje=0)
+  const rIIBB= rc.rib + rp.rib;
+  const rGan = rc.rg  + rp.rg;     // Ganancias (canje=0)
+  const rTot = rc.tr  + rp.tr;
+  set('res_r_iva',  ars(rIVA));
+  set('res_r_iva_det', p.rog?'5% (Bruto–Com) ROG':'10,5% (Bruto–Com)');
+  set('res_r_iibb', ars(rIIBB));
+  set('res_r_gan',  ars(rGan));
+  set('res_r_gan_det', p.rog?'2% (Bruto–Com–MNI) ROG':'15% (Bruto–Com–MNI)');
+  set('res_r_total',ars(rTot));
+
+  if(deudaARS>0){document.getElementById('res_deuda_row').style.display='';set('res_deuda',ars(deudaARS));}
+  else{document.getElementById('res_deuda_row').style.display='none';}
+  set('res_total_cubrir',ars(gastosTotal+deudaARS));
+
+  set('res_neto_total',ars(base));
+  const pctG=base>0?f((gastosTotal+deudaARS)/base*100,1):'0';
+  const recibis=base-(gastosTotal+deudaARS);
+  const pctR=base>0?f(recibis/base*100,1):'0';
+  set('res_gastos_lbl','Gastos + deuda ('+pctG+'%)');
+  set('res_gastos_neg','− '+ars(gastosTotal+deudaARS));
+  set('res_recibis_lbl','Lo que recibís ('+pctR+'%)');
+  set('res_recibis',ars(recibis));
+  // ─── visor permanente: agrega línea base, gastos%, recibís% ─────────
+  set('home_neto_recibido', ars0(base));
+  set('home_gastos_lbl', 'Gastos + deuda ('+pctG+'%)');
+  set('home_gastos_total', ars0(gastosTotal+deudaARS));
+  set('home_recibis_lbl', 'Lo que recibís ('+pctR+'%)');
+  set('home_recibis', ars0(recibis));
+
+  // expongo el último cálculo para que los PDFs lo reutilicen sin recalcular
+  window._lastCalc = {Kc, Kp, p, mermaFrac, deudaARS, plusUSD, plusARStn, tc};
+}
+
+// ─── PDF ─────────────────────────────────────────────────────────────
+
+
+// ─── PDF del resumen (1 hoja A4) ──────────────────────────────────────
+// ─── PDF dedicado para Canje o Pago (corto, una página) ────────────────
+function descargarPDFLiquidacion(tipoLiq){
+  // me aseguro de tener cálculos al día
+  calcular();
+  const lc = window._lastCalc;
+  if(!lc){ alert('Cargá los datos primero'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+
+  const p          = lc.p;
+  const tc         = lc.tc;
+  const plusUSD    = lc.plusUSD;
+  const plusARStn  = lc.plusARStn;
+  const mermaFrac  = lc.mermaFrac;
+  const deudaARS   = lc.deudaARS;
+  const Kc         = lc.Kc;
+  const Kp         = lc.Kp;
+
+  const isCanje = tipoLiq==='canje';
+  const K = isCanje ? Kc : Kp;
+  const r = liq(K, isCanje?'canje':'pago', p);
+  const plus = plusARStn>0 ? K*plusARStn : K*plusUSD*tc;
+  const fecha = new Date().toLocaleDateString('es-AR');
+  const gLbl = {soja:'Soja',maiz:'Maiz',trigo:'Trigo',cebada:'Cebada',girasol:'Girasol'}[p.grano]||'—';
+  const titulo = isCanje ? 'Liquidación · Canje' : 'Liquidación · Pago';
+  const colorMain = isCanje ? [0,68,129] : [0,168,107];
+
+  // Header
+  doc.setFillColor(...colorMain);
+  doc.rect(0,0,210,30,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(18);
+  doc.text(titulo, 14, 14);
+  doc.setFontSize(10);
+  doc.setFont('helvetica','normal');
+  doc.text(gLbl + '  ·  ' + fecha, 14, 22);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text(f(K,3)+' tn', 196, 14, {align:'right'});
+  if(mermaFrac>0){
+    doc.setFontSize(9);
+    doc.setFont('helvetica','normal');
+    doc.text('neto liq. '+f(K*(1-mermaFrac),3)+' tn', 196, 21, {align:'right'});
+  }
+
+  let y = 42;
+  doc.setTextColor(20,20,20);
+
+  // Datos generales
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...colorMain);
+  doc.text('DATOS DE LA OPERACIÓN', 14, y);
+  y += 4;
+  doc.setDrawColor(...colorMain);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setTextColor(60,60,60);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  function rowD(lbl, val){
+    doc.text(lbl, 14, y);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(20,20,20);
+    doc.text(val, 196, y, {align:'right'});
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(60,60,60);
+    y += 6;
+  }
+  rowD('TC ('+(isCanje?'comprador':'comprador')+')', '$ '+f(tc,2));
+  rowD('Precio', 'u$s '+f(p.precio,2)+'/tn  ·  $ '+f(p.precio*tc,2)+'/tn');
+  rowD('Comisión', p.comPct+' %  ·  '+(p.rog?'ROG activo':'Sin ROG'));
+  rowD('Kilos brutos', f(K,3)+' tn');
+  if(mermaFrac>0) rowD('Kilos netos liquidables', f(K*(1-mermaFrac),3)+' tn  ('+f(p.merma.total,2)+'% merma)');
+
+  y += 4;
+
+  // IMPORTE
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...colorMain);
+  doc.text('IMPORTE', 14, y);
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setTextColor(60,60,60);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  rowD('Importe bruto', ars(r.bruto));
+  rowD('IVA 10,5%', ars(r.bruto*0.105));
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(...colorMain);
+  doc.text('Total', 14, y);
+  doc.text(ars(r.total), 196, y, {align:'right'});
+  y += 8;
+
+  // DEDUCCIONES
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...colorMain);
+  doc.text('DEDUCCIONES', 14, y);
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setTextColor(60,60,60);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  function rowDed(lbl, val){
+    doc.text(lbl, 14, y);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(180,40,40);
+    doc.text('- '+val, 196, y, {align:'right'});
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(60,60,60);
+    y += 6;
+  }
+  rowDed('Comisión ('+p.comPct+'%)', ars(r.cb));
+  rowDed('IVA s/comisión (10,5%)', ars(r.ct - r.cb));
+  rowDed('Imp. sellos (10,5‰)', ars(r.sel));
+  rowDed('Derecho de registro (6‰)', ars(r.der));
+  rowDed('Honorarios cámara', ars(r.hon));
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(180,40,40);
+  doc.text('Total deducciones', 14, y);
+  doc.text('- '+ars(r.td), 196, y, {align:'right'});
+  y += 8;
+
+  // RETENCIONES
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...colorMain);
+  doc.text('RETENCIONES', 14, y);
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 6;
+
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(60,60,60);
+  doc.setFontSize(10);
+  if(isCanje){
+    rowDed('IVA ret. (canje exento)', '$ 0,00');
+    rowDed('IIBB (0,75%)', ars(r.rib));
+    rowDed('Ganancias (canje exento)', '$ 0,00');
+  } else {
+    rowDed('IVA retención', ars(r.ri));
+    rowDed('IIBB (0,75%)', ars(r.rib));
+    rowDed('Ganancias', ars(r.rg));
+  }
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(180,40,40);
+  doc.text('Total retenciones', 14, y);
+  doc.text('- '+ars(r.tr), 196, y, {align:'right'});
+  y += 10;
+
+  // TOTAL FINAL
+  doc.setFillColor(...colorMain);
+  doc.rect(10, y-4, 190, 30, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.text(isCanje?'Total a pagar':'Total a cobrar', 14, y+3);
+  doc.setFont('helvetica','bold');
+  doc.text(ars(r.tp), 196, y+3, {align:'right'});
+
+  if(p.rog){
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.text('CBU ROG (2,5%)', 14, y+10);
+    doc.setFont('helvetica','bold');
+    doc.text(ars(r.cbu), 196, y+10, {align:'right'});
+  }
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica','normal');
+  doc.text('Importe', 14, y+19);
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(45,204,205);
+  doc.setFontSize(15);
+  doc.text(ars(r.imp), 196, y+19, {align:'right'});
+
+  if(plus>0){
+    y += 32;
+    doc.setTextColor(60,60,60);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11);
+    doc.text('Total con plus', 14, y);
+    doc.setTextColor(0,168,107);
+    doc.text(ars(r.imp + plus), 196, y, {align:'right'});
+  }
+
+  // Footer
+  doc.setTextColor(150,150,150);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Liquidación Total · '+fecha, 105, 290, {align:'center'});
+
+  doc.save((isCanje?'canje_':'pago_')+fecha.replace(/\//g,'-')+'.pdf');
+}
+
+
+// ─── PDF del resumen completo (1 hoja A4) ────────────────────────────
+function descargarPDF(modo){
+  // Para canje/pago hacemos un PDF dedicado y simple
+  if(modo==='canje' || modo==='pago'){
+    descargarPDFLiquidacion(modo);
+    return;
+  }
+  // me aseguro de tener cálculos al día
+  calcular();
+  const lc = window._lastCalc;
+  if(!lc){ alert('Cargá los datos primero'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+
+  const p          = lc.p;
+  const tc         = lc.tc;
+  const plusUSD    = lc.plusUSD;
+  const plusARStn  = lc.plusARStn;
+  const mermaFrac  = lc.mermaFrac;
+  const deudaARS   = lc.deudaARS;
+  const Kc         = lc.Kc;
+  const Kp         = lc.Kp;
+  function gFor(k){ return gastosDetalle(k, k*(1-mermaFrac), p).total; }
+
+  const rc=liq(Kc,'canje',p);
+  const rp=liq(Kp,'pago',p);
+  const plusC=plusARStn>0?Kc*plusARStn:Kc*plusUSD*tc;
+  const plusP=plusARStn>0?Kp*plusARStn:Kp*plusUSD*tc;
+  const Ktot=Kc+Kp;
+  const Kneto=Ktot*(1-mermaFrac);
+  const det=gastosDetalle(Ktot,Kneto,p);
+  const gastosTotal=gFor(Kc)+gFor(Kp);
+  const netoC=rc.tp+plusC;
+  const netoP=rp.tp+plusP;
+  const base=netoC+netoP;
+  const recibis=base-(gastosTotal+deudaARS);
+  const fecha=new Date().toLocaleDateString('es-AR');
+
+  // Paleta
+  const P=[0,68,129], LB=[20,100,165], A=[45,204,205], G=[0,168,107], R=[218,56,49], D=[7,33,70], GRY=[120,125,135], BG=[248,250,252];
+
+  // Helpers
+  function txt(t,x,y,opt){doc.text(String(t),x,y,opt);}
+  function setFS(s){doc.setFontSize(s);}
+  function setColor(c){doc.setTextColor(...c);}
+  function setFill(c){doc.setFillColor(...c);}
+
+  // HEADER (compacto)
+  setFill(P);
+  doc.rect(0,0,210,22,'F');
+  setColor([255,255,255]);
+  doc.setFont('helvetica','bold');
+  setFS(14);
+  txt('Liquidacion Total',12,10);
+  doc.setFont('helvetica','normal');
+  setFS(8);
+  setColor([200,220,240]);
+  txt('Resumen de operacion · '+fecha,12,16);
+
+  // Badge kilos
+  setFill(A);
+  doc.roundedRect(150,6,50,11,2,2,'F');
+  setColor(P);
+  doc.setFont('helvetica','bold');
+  setFS(11);
+  txt(f(Ktot,3)+' tn',175,13,{align:'center'});
+
+  let y=30;
+
+  // Datos compactos (2 columnas)
+  const gLbl={soja:'Soja',maiz:'Maiz',trigo:'Trigo',cebada:'Cebada',girasol:'Girasol'}[p.grano]||'—';
+  doc.setFont('helvetica','bold');
+  setFS(8);
+  setColor(P);
+  txt('DATOS',12,y);
+  doc.setDrawColor(...P);
+  doc.setLineWidth(0.3);
+  doc.line(12,y+1,198,y+1);
+  y+=4.5;
+
+  doc.setFont('helvetica','normal');
+  setFS(8.5);
+  const datos=[
+    ['Grano',gLbl+(p.merma?' · base '+f(p.merma.base,1)+'%':'')],
+    ['TC comp/vend','$ '+f(tc,0)+' / $ '+f(pv('tc_vendedor')||tc,0)],
+    ['Precio','u$s '+f(p.precio,2)+'/tn'],
+    ['Com · ROG',p.comPct+'% · '+(p.rog?'Si':'No')]
+  ];
+  if(plusUSD>0||plusARStn>0){
+    datos.push(['Plus',(plusUSD>0?'u$s '+f(plusUSD,2)+'/tn':'')+(plusARStn>0?' $ '+f(plusARStn,0)+'/tn':'')]);
+  }
+  datos.forEach((r,i)=>{
+    const col=i%2;
+    const row=Math.floor(i/2);
+    const x=12+col*93;
+    const yy=y+row*5;
+    setColor(GRY);txt(r[0],x,yy);
+    setColor([20,20,20]);doc.setFont('helvetica','bold');
+    txt(r[1],x+93-2,yy,{align:'right'});
+    doc.setFont('helvetica','normal');
+  });
+  y+=Math.ceil(datos.length/2)*5+3;
+
+  // Mermas (si aplica)
+  if(p.humRec>0 && p.merma.total>0){
+    doc.setFont('helvetica','bold');
+    setFS(8);
+    setColor(P);
+    txt('MERMAS',12,y);
+    doc.line(12,y+1,198,y+1);
+    y+=4.5;
+
+    const Kkg=Ktot*1000;
+    const fisPct=p.merma.porSecado+p.merma.manipuleo;
+    const kgFis=Kkg*fisPct/100;
+    const kgVol=Kkg*p.merma.volatil/100;
+    const kgTot=Kkg*p.merma.total/100;
+    doc.setFont('helvetica','normal');
+    setFS(8.5);
+    const mermas=[
+      ['Humedad recibo',f(p.humRec,1)+'% (base '+f(p.merma.base,1)+'%)'],
+      ['Merma fisica',f(kgFis,0)+' kg · '+f(fisPct,2)+'%'],
+      ['Volatil',f(kgVol,0)+' kg · '+f(p.merma.volatil,2)+'%'],
+      ['Merma total',f(kgTot,0)+' kg · '+f(p.merma.total,2)+'%']
+    ];
+    if(p.puntosASecar>0){
+      mermas.push(['Puntos a secar',f(p.puntosASecar,2)+' pt'+(p.puntosLibres>0?' ('+f(p.puntosLibres,1)+' libres)':'')]);
+    }
+    mermas.forEach((r,i)=>{
+      const col=i%2;
+      const row=Math.floor(i/2);
+      const x=12+col*93;
+      const yy=y+row*5;
+      setColor(GRY);txt(r[0],x,yy);
+      setColor([20,20,20]);doc.setFont('helvetica','bold');
+      txt(r[1],x+93-2,yy,{align:'right'});
+      doc.setFont('helvetica','normal');
+    });
+    y+=Math.ceil(mermas.length/2)*5+3;
+  }
+
+  // CANJE y PAGO (bloques)
+  const bh=36;
+  setFill(P);
+  doc.roundedRect(12,y,90,bh,2,2,'F');
+  setColor([255,255,255]);
+  doc.setFont('helvetica','bold');
+  setFS(8);
+  txt('CANJE',15,y+5);
+  setFS(15);
+  txt(f(Kc,3)+' tn bruto',15,y+13);
+  setFS(7);
+  doc.setFont('helvetica','normal');
+  if(mermaFrac>0) txt('Neto liquidable: '+f(Kc*(1-mermaFrac),3)+' tn',15,y+18);
+
+  let yc=y+23;
+  setFS(8);
+  txt('Neto liq.',15,yc); doc.setFont('helvetica','bold'); txt(ars(rc.tp),99,yc,{align:'right'});
+  yc+=4;
+  if(plusC>0){
+    doc.setFont('helvetica','normal');txt('Plus',15,yc);
+    doc.setFont('helvetica','bold');txt(ars(plusC),99,yc,{align:'right'});
+    yc+=4;
+  }
+  doc.setDrawColor(255,255,255);doc.setLineWidth(0.2);
+  doc.line(15,yc-1,99,yc-1);
+  doc.setFont('helvetica','bold');
+  txt('Total',15,yc+1.5);
+  txt(ars(netoC),99,yc+1.5,{align:'right'});
+
+  setFill(G);
+  doc.roundedRect(108,y,90,bh,2,2,'F');
+  setColor([255,255,255]);
+  doc.setFont('helvetica','bold');
+  setFS(8);
+  txt('PAGO',111,y+5);
+  setFS(15);
+  txt(f(Kp,3)+' tn bruto',111,y+13);
+  setFS(7);
+  doc.setFont('helvetica','normal');
+  if(mermaFrac>0&&Kp>0) txt('Neto liquidable: '+f(Kp*(1-mermaFrac),3)+' tn',111,y+18);
+
+  let yp=y+23;
+  setFS(8);
+  txt('Neto liq.',111,yp); doc.setFont('helvetica','bold'); txt(ars(rp.tp),195,yp,{align:'right'});
+  yp+=4;
+  if(plusP>0){
+    doc.setFont('helvetica','normal');txt('Plus',111,yp);
+    doc.setFont('helvetica','bold');txt(ars(plusP),195,yp,{align:'right'});
+    yp+=4;
+  }
+  doc.line(111,yp-1,195,yp-1);
+  doc.setFont('helvetica','bold');
+  txt('Total',111,yp+1.5);
+  txt(ars(netoP),195,yp+1.5,{align:'right'});
+
+  y+=bh+4;
+
+  // CONDICIONES DE RECIBO detalle
+  doc.setFont('helvetica','bold');
+  setFS(8);
+  setColor(P);
+  txt('CONDICIONES DE RECIBO',12,y);
+  doc.setDrawColor(...P);
+  doc.line(12,y+1,198,y+1);
+  y+=4.5;
+
+  doc.setFont('helvetica','normal');
+  setFS(8.5);
+  function rowG(lbl,val,detail){
+    setColor(GRY);
+    txt(lbl,12,y);
+    if(detail){
+      setFS(7);
+      setColor([160,160,160]);
+      txt(detail,12,y+3);
+      setFS(8.5);
+    }
+    setColor([20,20,20]);
+    doc.setFont('helvetica','bold');
+    txt(val,198,y,{align:'right'});
+    doc.setFont('helvetica','normal');
+    y+=detail?7:5;
+  }
+
+  const slKfor2  = fleteLargoTipo==='directo' ? Ktot : Kneto;
+  const slLabel2 = fleteLargoTipo==='directo' ? 'Flete directo' : 'Flete';
+  const slBase2  = fleteLargoTipo==='directo' ? 'bruto' : 'neto';
+  const itemDefs2=[
+    {id:'paritarias',label:'Paritarias',kFor:Ktot,base:'bruto'},
+    {id:'fumigada',label:'Fumigada',kFor:Ktot,base:'bruto'},
+    {id:'secada',label:'Secada',kFor:Ktot,base:'bruto',secada:true},
+    {id:'flete_corto',label:'Flete corto',kFor:Ktot,base:'bruto', flete:'corto'},
+    {id:'flete_largo',label:slLabel2,kFor:slKfor2,base:slBase2, flete:'salida'}
+  ];
+  itemDefs2.forEach(it=>{
+    const monto=det.detalle[it.id].monto;
+    if(monto>0){
+      const v=pv('g_'+it.id)||0;
+      const curEl=document.getElementById('g_'+it.id+'_curr');
+      const cur=curEl?curEl.dataset.curr:'ars';
+      let d;
+      if(it.secada){
+        d=(cur==='usd'?'u$s '+f(v,2):'$ '+f(v,0))+'/pt · '+f(p.puntosASecar,2)+' pt · '+f(it.kFor,3)+' tn';
+      } else if(it.flete && fleteModos[it.flete]==='km'){
+        const km=parseInt(pv('g_'+it.id+'_km'))||0;
+        const aj=pv('g_'+it.id+'_aj')||0;
+        const tarifa=det.detalle[it.id].tn;
+        d=km+' km · '+(aj>0?'+':'')+f(aj,1)+'% · $ '+f(tarifa,2)+'/tn × '+f(it.kFor,3)+' tn '+it.base;
+      } else {
+        d=(cur==='usd'?'u$s '+f(v,2):'$ '+f(v,0))+'/tn · '+f(it.kFor,3)+' tn '+it.base;
+      }
+      rowG(it.label,ars(monto),d);
+    }
+  });
+
+  // Subtotal + IVA + Total
+  doc.setDrawColor(220,225,235);
+  doc.setLineWidth(0.2);
+  doc.line(12,y-1,198,y-1);
+  y+=1;
+  setFS(8.5);
+  setColor(GRY);txt('Subtotal sin IVA',12,y);
+  setColor([20,20,20]);doc.setFont('helvetica','bold');txt(ars(det.subtotal),198,y,{align:'right'});
+  doc.setFont('helvetica','normal');
+  y+=4;
+  setColor(GRY);txt('IVA 21%',12,y);
+  setColor([20,20,20]);doc.setFont('helvetica','bold');txt(ars(det.iva),198,y,{align:'right'});
+  y+=5;
+
+  setFill([235,240,248]);
+  doc.rect(12,y-3.5,186,5.5,'F');
+  setColor(P);
+  setFS(9);
+  txt('Total recibo c/IVA',14,y);
+  txt(ars(det.total),196,y,{align:'right'});
+  y+=8;
+
+  // ─── DEDUCCIONES DE LA LIQUIDACIÓN ──────────────────────
+  doc.setFont('helvetica','bold');
+  setFS(8);
+  setColor(P);
+  txt('DEDUCCIONES DE LA LIQUIDACIÓN',12,y);
+  doc.setDrawColor(...P);
+  doc.line(12,y+1,198,y+1);
+  y+=4.5;
+
+  const dCom    = rc.cb  + rp.cb;
+  const dComIVA = rc.ct  + rp.ct;
+  const dSel    = rc.sel + rp.sel;
+  const dDer    = rc.der + rp.der;
+  const dHon    = rc.hon + rp.hon;
+  const dTotal  = rc.td  + rp.td;
+
+  doc.setFont('helvetica','normal');
+  setFS(8.5);
+  function rowDed(lbl, val, det){
+    setColor(GRY);txt(lbl,12,y);
+    if(det){
+      setFS(7);setColor([160,160,160]);txt(det,12,y+3);setFS(8.5);
+    }
+    setColor([20,20,20]);doc.setFont('helvetica','bold');
+    txt(val,198,y,{align:'right'});
+    doc.setFont('helvetica','normal');
+    y += det ? 7 : 5;
+  }
+  rowDed('Comisión + IVA', ars(dComIVA), p.comPct+'% del bruto + IVA 10,5%');
+  rowDed('Imp. sellos', ars(dSel), '10,5‰ s/comisión + IVA');
+  rowDed('Derecho registro', ars(dDer), '6‰ del bruto');
+  rowDed('Honorarios cámara', ars(dHon), '$915 × kilos + IVA');
+
+  doc.setDrawColor(220,225,235);
+  doc.setLineWidth(0.2);
+  doc.line(12,y-1,198,y-1);
+  y+=1;
+  setFS(9);
+  setFill([235,240,248]);
+  doc.rect(12,y-3.5,186,5.5,'F');
+  setColor(P);
+  txt('Total deducciones',14,y);
+  txt(ars(dTotal),196,y,{align:'right'});
+  y+=8;
+
+  // ─── RETENCIONES DE LA LIQUIDACIÓN ──────────────────────
+  doc.setFont('helvetica','bold');
+  setFS(8);
+  setColor(P);
+  txt('RETENCIONES DE LA LIQUIDACIÓN',12,y);
+  doc.setDrawColor(...P);
+  doc.line(12,y+1,198,y+1);
+  y+=4.5;
+
+  const rIVA = rc.ri  + rp.ri;
+  const rIIBB= rc.rib + rp.rib;
+  const rGan = rc.rg  + rp.rg;
+  const rTot = rc.tr  + rp.tr;
+
+  doc.setFont('helvetica','normal');
+  setFS(8.5);
+  rowDed('IVA retención', ars(rIVA), p.rog?'5% (Bruto–Com) ROG':'10,5% (Bruto–Com)');
+  rowDed('IIBB',          ars(rIIBB),'0,75% del bruto');
+  rowDed('Ganancias',     ars(rGan), p.rog?'2% (Bruto–Com–MNI) ROG':'15% (Bruto–Com–MNI)');
+
+  doc.setDrawColor(220,225,235);
+  doc.setLineWidth(0.2);
+  doc.line(12,y-1,198,y-1);
+  y+=1;
+  setFS(9);
+  setFill([235,240,248]);
+  doc.rect(12,y-3.5,186,5.5,'F');
+  setColor(P);
+  txt('Total retenciones',14,y);
+  txt(ars(rTot),196,y,{align:'right'});
+  y+=7;
+
+  if(deudaARS>0){
+    setFS(8.5);
+    setColor(GRY);doc.setFont('helvetica','normal');txt('Deuda insumos',12,y);
+    setColor([20,20,20]);doc.setFont('helvetica','bold');txt(ars(deudaARS),198,y,{align:'right'});
+    y+=5;
+  }
+
+  // Total a cubrir (línea fuerte)
+  doc.setDrawColor(...P);
+  doc.setLineWidth(0.6);
+  doc.line(12,y-1,198,y-1);
+  setFS(9.5);
+  setColor(P);
+  doc.setFont('helvetica','bold');
+  txt('Total a cubrir',12,y+3.5);
+  txt(ars(gastosTotal+deudaARS),198,y+3.5,{align:'right'});
+  y+=9;
+
+  // BLOQUE FINAL (oscuro)
+  const fh=32;
+  setFill(D);
+  doc.roundedRect(12,y,186,fh,2,2,'F');
+
+  setColor([200,210,230]);
+  doc.setFont('helvetica','normal');
+  setFS(9);
+  txt('Total neto recibido',17,y+7);
+  setColor([255,255,255]);
+  doc.setFont('helvetica','bold');
+  txt(ars(base),193,y+7,{align:'right'});
+
+  setColor([200,210,230]);
+  doc.setFont('helvetica','normal');
+  const pctG=base>0?f((gastosTotal+deudaARS)/base*100,1):'0';
+  txt('Gastos + deuda ('+pctG+'%)',17,y+13);
+  setColor([255,140,140]);
+  doc.setFont('helvetica','bold');
+  txt('- '+ars(gastosTotal+deudaARS),193,y+13,{align:'right'});
+
+  doc.setDrawColor(...A);
+  doc.setLineWidth(0.4);
+  doc.line(17,y+17,193,y+17);
+
+  const pctR=base>0?f(recibis/base*100,1):'0';
+  setColor([255,255,255]);
+  doc.setFont('helvetica','bold');
+  setFS(10);
+  txt('LO QUE RECIBIS ('+pctR+'%)',17,y+25);
+  setColor(A);
+  setFS(15);
+  txt(ars(recibis),193,y+25,{align:'right'});
+
+  // Footer
+  setColor([150,150,150]);
+  doc.setFont('helvetica','normal');
+  setFS(7);
+  txt('Liquidacion Total · '+fecha,105,290,{align:'center'});
+
+  const fname = (modo==='canje' ? 'canje_' : modo==='pago' ? 'pago_' : 'resumen_') + fecha.replace(/\//g,'-')+'.pdf';
+  doc.save(fname);
+}
+
+// Mapa: cada panel sub-section apunta a la clase de secciones a mostrar dentro de tab-op
+const SUB_PANELS = {
+  datos:  {tab:'op', klass:'sec-datos',  title:'Datos de la operación'},
+  gastos: {tab:'op', klass:'sec-gastos', title:'Condición de recibo'},
+};
+const PANEL_TITLES = {
+  canje:'Liquidación · Canje',
+  pago:'Liquidación · Pago',
+  resumen:'Resumen de operación',
+};
+
+// Secuencia de paneles para navegación entre Datos y Condiciones
+const PANEL_SEQ = ['datos','gastos'];
+
+function switchTab(name){
+  // limpiar paneles previos
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelector('.panel-header')?.remove();
+  document.querySelector('.panel-nav')?.remove();
+  const visor = document.querySelector('.visor-wrap');
+
+  if(name==='home'){
+    document.getElementById('tab-home').classList.add('active');
+    if(visor) visor.style.display = '';  // mostrar visor en home
+    window.scrollTo(0,0);
+    return;
+  }
+
+  // ocultar visor en cualquier panel para que se desplieguen completamente
+  if(visor) visor.style.display = 'none';
+
+  // si es una sub-section de op (datos/gastos), mostramos tab-op y filtramos secciones
+  const sub = SUB_PANELS[name];
+  if(sub){
+    const tabEl = document.getElementById('tab-'+sub.tab);
+    tabEl.classList.add('active');
+    // mostrar solo secciones con clase indicada
+    tabEl.querySelectorAll('.section, .op-result').forEach(s=>{
+      s.style.display = s.classList.contains(sub.klass) ? '' : 'none';
+    });
+    // si es Datos, re-aplicar setModo para que las secciones importe-only respeten el modo actual
+    if(name==='datos'){
+      document.querySelectorAll('.sec-importe-only').forEach(s=>{
+        if(s.style.display!=='none'){
+          s.style.display = (modo==='importe') ? '' : 'none';
+        }
+      });
+    }
+    insertPanelHeader(sub.title, name);
+    insertPanelNav(name);
+    window.scrollTo(0,0);
+    return;
+  }
+
+  // tabs full (canje, pago, resumen)
+  const target = document.getElementById('tab-'+name);
+  if(target){
+    target.classList.add('active');
+    insertPanelHeader(PANEL_TITLES[name] || name, name);
+    insertPanelNav(name);
+    window.scrollTo(0,0);
+  }
+}
+
+function insertPanelHeader(title, name){
+  const hdr = document.createElement('div');
+  hdr.className = 'panel-header';
+  hdr.innerHTML = `<span class="panel-title">${title}</span>`;
+  const mainHeader = document.querySelector('header');
+  mainHeader.parentNode.insertBefore(hdr, mainHeader.nextSibling);
+}
+
+// Barra de navegación: Volver + (Siguiente solo en datos/gastos)
+function insertPanelNav(name){
+  const idx = PANEL_SEQ.indexOf(name);
+  const isInSeq = idx >= 0;
+  let backTarget = 'home';
+  let nextTarget = null;
+  if(isInSeq){
+    backTarget = idx===0 ? 'home' : PANEL_SEQ[idx-1];
+    nextTarget = idx===PANEL_SEQ.length-1 ? 'home' : PANEL_SEQ[idx+1];
+  }
+  const nav = document.createElement('div');
+  nav.className = 'panel-nav';
+  let html = `<button class="pnav-btn pnav-back" onclick="switchTab('${backTarget}')">‹ Volver</button>`;
+  if(nextTarget){
+    html += `<button class="pnav-btn pnav-next" onclick="switchTab('${nextTarget}')">Siguiente ›</button>`;
+  }
+  nav.innerHTML = html;
+  // Insertar al final del contenido del panel activo (no en el body)
+  // así aparece cuando bajás al final del scroll
+  const activeTab = document.querySelector('.tab-content.active');
+  if(activeTab){
+    activeTab.appendChild(nav);
+  } else {
+    document.body.appendChild(nav);
+  }
+}
+
+// ─── Persistencia de estado ──────────────────────────────────────────
+const STORAGE_KEY = 'liqtotal_state_v1';
+
+function guardarEstado(){
+  try{
+    const state = {};
+    // inputs
+    document.querySelectorAll('input[id]').forEach(el=>{
+      if(el.type==='checkbox') state[el.id]=el.checked;
+      else state[el.id]=el.value;
+    });
+    // selects
+    document.querySelectorAll('select[id]').forEach(el=>{
+      state[el.id]=el.value;
+    });
+    // toggles de moneda
+    document.querySelectorAll('.curr-btn[id]').forEach(el=>{
+      if(el.dataset.curr) state['curr_'+el.id]=el.dataset.curr;
+    });
+    // modo/dest/fcModo + flete modos
+    state.__modo = modo;
+    state.__dest = dest;
+    state.__fcModo = fcModo;
+    state.__fleteModos = {...fleteModos};
+    state.__fleteLargoTipo = fleteLargoTipo;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch(e){ /* ignorar */ }
+}
+
+function cargarEstado(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const state = JSON.parse(raw);
+    // inputs
+    document.querySelectorAll('input[id]').forEach(el=>{
+      if(state[el.id]!==undefined){
+        if(el.type==='checkbox') el.checked=state[el.id];
+        else el.value=state[el.id];
+      }
+    });
+    // selects
+    document.querySelectorAll('select[id]').forEach(el=>{
+      if(state[el.id]!==undefined) el.value=state[el.id];
+    });
+    // toggles moneda
+    document.querySelectorAll('.curr-btn[id]').forEach(el=>{
+      const saved = state['curr_'+el.id];
+      if(saved && saved!==el.dataset.curr){
+        // simular click del toggle para que actualice texto y clases
+        const baseId = el.id.replace('_curr','');
+        toggleCurr(baseId);
+      }
+    });
+    // modos
+    if(state.__modo) setModo(state.__modo);
+    if(state.__dest) setDest(state.__dest);
+    if(state.__fcModo) setFCModo(state.__fcModo);
+    if(state.__fleteLargoTipo) setFleteTipo(state.__fleteLargoTipo);
+    if(state.__fleteModos){
+      Object.keys(state.__fleteModos).forEach(f=>{
+        const m = state.__fleteModos[f];
+        if(m) fleteModos[f] = m;
+      });
+    }
+    return true;
+  } catch(e){ return false; }
+}
+
+document.querySelectorAll('input:not(.num-input),select').forEach(el=>{
+  el.addEventListener('input',calcular);
+  el.addEventListener('change',calcular);
+});
+// num-input: blur se encarga de formatear y recalcular
+document.querySelectorAll('.num-input').forEach(el=>{
+  el.addEventListener('input',()=>{ if(document.activeElement!==el) calcular(); });
+});
+
+// cargar estado guardado ANTES de formatear/calcular
+cargarEstado();
+
+// formatear inputs al cargar
+document.querySelectorAll('.num-input').forEach(el=>{
+  const n=parseNum(el.value);
+  el.value=fmtInput(n);
+});
+
+// actualizar tarifas de los 3 fletes (modos guardados)
+['corto','salida'].forEach(f=>{
+  // re-aplicar el modo guardado para mostrar/ocultar bodies
+  setFleteModo(f, fleteModos[f] || 'tarifa');
+});
+
+calcular();
+
+// listeners adicionales: km y ajuste actualizan la tarifa al vuelo
+['flete_corto','flete_largo'].forEach(id=>{
+  ['_km','_aj'].forEach(suf=>{
+    const el=document.getElementById('g_'+id+suf);
+    if(el){
+      el.addEventListener('input', ()=>{
+        const flete = id==='flete_corto'?'corto' : 'salida';
+        actualizarKmTarifa(flete);
+      });
+    }
+  });
+});
+
+// guardar automáticamente en cada cambio (con pequeño debounce)
+let _saveTimer=null;
+function scheduleSave(){
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(guardarEstado, 300);
+}
+document.querySelectorAll('input,select,.curr-btn').forEach(el=>{
+  el.addEventListener('change', scheduleSave);
+  el.addEventListener('input',  scheduleSave);
+  el.addEventListener('click',  scheduleSave);
+});
+
+// ─── Service Worker para PWA instalable ──────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
