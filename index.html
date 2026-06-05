@@ -2859,5 +2859,203 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
+
+<!-- ASISTENTE GEMINI -->
+<style>
+  #gemini-btn{
+    position:fixed;bottom:24px;right:20px;z-index:999;
+    width:54px;height:54px;border-radius:50%;
+    background:linear-gradient(135deg,#4285f4,#0f9d58);
+    border:none;cursor:pointer;box-shadow:0 4px 16px rgba(66,133,244,.45);
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .2s,box-shadow .2s;
+  }
+  #gemini-btn:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(66,133,244,.55);}
+  #gemini-panel{
+    position:fixed;bottom:88px;right:16px;z-index:998;
+    width:calc(100vw - 32px);max-width:400px;
+    background:#fff;border-radius:20px;
+    box-shadow:0 8px 40px rgba(0,0,0,.18);
+    display:none;flex-direction:column;overflow:hidden;
+    max-height:70vh;
+  }
+  #gemini-panel.open{display:flex;}
+  .gem-head{
+    background:linear-gradient(135deg,#4285f4,#0f9d58);
+    padding:14px 18px;display:flex;align-items:center;gap:10px;
+    color:#fff;font-weight:700;font-size:15px;
+  }
+  .gem-head span{flex:1;}
+  .gem-head button{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;}
+  .gem-msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+  .gem-msg{max-width:88%;padding:10px 14px;border-radius:14px;font-size:13.5px;line-height:1.5;}
+  .gem-msg.bot{background:#f0f4ff;color:#1a1a2e;align-self:flex-start;border-bottom-left-radius:4px;}
+  .gem-msg.user{background:#4285f4;color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}
+  .gem-msg.error{background:#fff0f0;color:#c0392b;}
+  .gem-loading{display:flex;gap:5px;align-items:center;padding:10px 14px;}
+  .gem-loading span{width:7px;height:7px;background:#4285f4;border-radius:50%;animation:gem-bounce .9s infinite;}
+  .gem-loading span:nth-child(2){animation-delay:.15s;}
+  .gem-loading span:nth-child(3){animation-delay:.3s;}
+  @keyframes gem-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}
+  .gem-input-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid #eee;}
+  .gem-input-row input{
+    flex:1;border:1.5px solid #e2e8f0;border-radius:12px;
+    padding:10px 14px;font-size:14px;outline:none;transition:border-color .2s;
+  }
+  .gem-input-row input:focus{border-color:#4285f4;}
+  .gem-input-row button{
+    background:#4285f4;color:#fff;border:none;border-radius:12px;
+    padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;
+  }
+  .gem-actions{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;}
+  .gem-chip{
+    background:#f0f4ff;color:#4285f4;border:1px solid #d0e0ff;
+    border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;
+  }
+</style>
+
+<button id="gemini-btn" onclick="toggleGemini()" title="Asistente Gemini">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5c-1.5 3.5-5 5-8.5 5C4.5 13 7 16.5 12 20.5c5-4 7.5-7.5 8.5-12C17 8.5 13.5 7 12 3.5z" fill="white"/>
+  </svg>
+</button>
+
+<div id="gemini-panel">
+  <div class="gem-head">
+    <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3.5c-1.5 3.5-5 5-8.5 5C4.5 13 7 16.5 12 20.5c5-4 7.5-7.5 8.5-12C17 8.5 13.5 7 12 3.5z" fill="white"/></svg>
+    <span>Asistente Gemini</span>
+    <button onclick="toggleGemini()">&#x2715;</button>
+  </div>
+  <div class="gem-msgs" id="gem-msgs">
+    <div class="gem-msg bot">Hola! Describime la operacion y completo los campos automaticamente.<br><br>Ej: <em>"500 tn de soja a 380 dolares, debo 20.000 USD"</em></div>
+  </div>
+  <div class="gem-actions" id="gem-chips">
+    <div class="gem-chip" onclick="gemSend(this.textContent)">500 tn soja $380</div>
+    <div class="gem-chip" onclick="gemSend(this.textContent)">1000 tn maiz $200</div>
+    <div class="gem-chip" onclick="gemSend(this.textContent)">Conviene canje o pago?</div>
+  </div>
+  <div class="gem-input-row">
+    <input id="gem-input" type="text" placeholder="Ej: 800 tn trigo a 250 USD..." onkeydown="if(event.key==='Enter')gemEnviar()">
+    <button onclick="gemEnviar()">Enviar</button>
+  </div>
+</div>
+
+<script>
+const GEMINI_KEY = '__GEMINI_API_KEY__';
+
+function toggleGemini(){
+  const p = document.getElementById('gemini-panel');
+  p.classList.toggle('open');
+  if(p.classList.contains('open')) document.getElementById('gem-input').focus();
+}
+
+function gemEnviar(){
+  const inp = document.getElementById('gem-input');
+  const txt = inp.value.trim();
+  if(!txt) return;
+  inp.value = '';
+  gemSend(txt);
+}
+
+function gemSend(texto){
+  document.getElementById('gemini-panel').classList.add('open');
+  agregarMensaje(texto, 'user');
+  document.getElementById('gem-chips').style.display='none';
+  const loading = document.createElement('div');
+  loading.className='gem-loading';
+  loading.innerHTML='<span></span><span></span><span></span>';
+  loading.id='gem-loading';
+  document.getElementById('gem-msgs').appendChild(loading);
+  scrollMsgs();
+  llamarGemini(texto).then(resp=>{
+    document.getElementById('gem-loading')?.remove();
+    procesarRespuesta(resp);
+  }).catch(()=>{
+    document.getElementById('gem-loading')?.remove();
+    agregarMensaje('Error al conectar con Gemini. Verifica tu conexion.','error');
+  });
+}
+
+async function llamarGemini(texto){
+  const granoActual = document.getElementById('grano')?.value || '';
+  const precioActual = document.getElementById('precio')?.value || '';
+  const tcActual = document.getElementById('tc')?.value || '';
+
+  const prompt = `Sos un asistente para una app de liquidacion de granos en Argentina.
+El usuario describira una operacion. Extraer los datos y devolver SOLO un JSON sin texto extra ni markdown:
+{
+  "grano": "soja|maiz|trigo|cebada|girasol",
+  "precio": numero USD/tn,
+  "tc": numero tipo cambio comprador $/USD,
+  "tc_vendedor": numero tipo cambio vendedor $/USD,
+  "modo": "importe|kilos",
+  "k_total": toneladas (solo si modo=kilos),
+  "deuda_usd": deuda en dolares,
+  "deuda_ars": deuda en pesos,
+  "cobrar_usd": importe a cobrar USD,
+  "cobrar_ars": importe a cobrar pesos,
+  "mensaje": "texto breve confirmando lo que entendiste"
+}
+Solo incluir campos mencionados. Contexto actual: grano=${granoActual}, precio=${precioActual} USD, TC=${tcActual}.
+Si pregunta conveniencia canje vs pago, responder con solo el campo "mensaje" con el analisis.
+Usuario: ${texto}`;
+
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+GEMINI_KEY,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.1,maxOutputTokens:512}})
+  });
+  if(!resp.ok) throw new Error('API '+resp.status);
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+function procesarRespuesta(texto){
+  const clean = texto.replace(/```json|```/g,'').trim();
+  try{
+    const obj = JSON.parse(clean);
+    let aplicados = [];
+    if(obj.grano){ const s=document.getElementById('grano'); if(s){s.value=obj.grano;s.dispatchEvent(new Event('change'));aplicados.push('grano');} }
+    if(obj.precio!==undefined){ setInputVal('precio',obj.precio); aplicados.push('precio'); }
+    if(obj.tc!==undefined){ setInputVal('tc',obj.tc); aplicados.push('TC comprador'); }
+    if(obj.tc_vendedor!==undefined){ setInputVal('tc_vendedor',obj.tc_vendedor); aplicados.push('TC vendedor'); }
+    if(obj.modo){ setModo(obj.modo); }
+    if(obj.k_total!==undefined){ setInputVal('k_total',obj.k_total); aplicados.push('toneladas'); if(!obj.modo)setModo('kilos'); }
+    if(obj.deuda_usd!==undefined){ setInputVal('deuda_usd',obj.deuda_usd); aplicados.push('deuda USD'); }
+    if(obj.deuda_ars!==undefined){ setInputVal('deuda_ars',obj.deuda_ars); aplicados.push('deuda $'); }
+    if(obj.cobrar_usd!==undefined){ setInputVal('cobrar_usd',obj.cobrar_usd); aplicados.push('cobrar USD'); }
+    if(obj.cobrar_ars!==undefined){ setInputVal('cobrar_ars',obj.cobrar_ars); aplicados.push('cobrar $'); }
+    if(typeof calcular==='function') calcular();
+    const msg = obj.mensaje || (aplicados.length ? 'Complete: '+aplicados.join(', ')+'. Revisa los resultados.' : 'Listo.');
+    agregarMensaje(msg,'bot');
+  } catch(e){
+    agregarMensaje(texto,'bot');
+  }
+}
+
+function setInputVal(id,val){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const num=parseFloat(val);
+  if(isNaN(num))return;
+  el.value=num.toLocaleString('es-AR',{maximumFractionDigits:3});
+  el.dispatchEvent(new Event('input'));
+  el.dispatchEvent(new Event('change'));
+}
+
+function agregarMensaje(txt,tipo){
+  const msgs=document.getElementById('gem-msgs');
+  const div=document.createElement('div');
+  div.className='gem-msg '+tipo;
+  div.textContent=txt;
+  msgs.appendChild(div);
+  scrollMsgs();
+}
+
+function scrollMsgs(){
+  const m=document.getElementById('gem-msgs');
+  m.scrollTop=m.scrollHeight;
+}
+</script>
 </body>
 </html>
