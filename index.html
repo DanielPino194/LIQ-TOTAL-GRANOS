@@ -2907,6 +2907,13 @@ if('serviceWorker' in navigator){
     background:#4285f4;color:#fff;border:none;border-radius:12px;
     padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;
   }
+  #gem-mic{
+    background:#f0f4ff;color:#4285f4;border:1.5px solid #e2e8f0;
+    border-radius:12px;padding:10px 12px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:all .2s;
+  }
+  #gem-mic.listening{background:#ff4757;border-color:#ff4757;color:#fff;animation:gem-pulse 1.2s infinite;}
+  @keyframes gem-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,71,87,.5)}50%{box-shadow:0 0 0 8px rgba(255,71,87,0)}}
   .gem-actions{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 12px;}
   .gem-chip{
     background:#f0f4ff;color:#4285f4;border:1px solid #d0e0ff;
@@ -2924,6 +2931,7 @@ if('serviceWorker' in navigator){
   <div class="gem-head">
     <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3.5c-1.5 3.5-5 5-8.5 5C4.5 13 7 16.5 12 20.5c5-4 7.5-7.5 8.5-12C17 8.5 13.5 7 12 3.5z" fill="white"/></svg>
     <span>Asistente Gemini</span>
+    <button id="gem-voice-toggle" onclick="gemToggleVoz()" title="Activar/desactivar voz" style="font-size:18px">&#x1F507;</button>
     <button onclick="toggleGemini()">&#x2715;</button>
   </div>
   <div class="gem-msgs" id="gem-msgs">
@@ -2936,6 +2944,9 @@ if('serviceWorker' in navigator){
   </div>
   <div class="gem-input-row">
     <input id="gem-input" type="text" placeholder="Ej: 800 tn trigo a 250 USD..." onkeydown="if(event.key==='Enter')gemEnviar()">
+    <button id="gem-mic" onclick="gemMic()" title="Hablar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+    </button>
     <button onclick="gemEnviar()">Enviar</button>
   </div>
 </div>
@@ -2955,6 +2966,42 @@ function gemEnviar(){
   if(!txt) return;
   inp.value = '';
   gemSend(txt);
+}
+
+// ── Reconocimiento de voz ──
+let gemRecognition = null;
+function gemMic(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    agregarMensaje('Tu navegador no soporta reconocimiento de voz. Proba con Chrome.','error');
+    return;
+  }
+  const micBtn = document.getElementById('gem-mic');
+  // Si ya esta escuchando, detener
+  if(gemRecognition){
+    gemRecognition.stop();
+    return;
+  }
+  gemRecognition = new SR();
+  gemRecognition.lang = 'es-AR';
+  gemRecognition.continuous = false;
+  gemRecognition.interimResults = true;
+
+  gemRecognition.onstart = ()=>{ micBtn.classList.add('listening'); };
+  gemRecognition.onresult = (e)=>{
+    let texto = '';
+    for(let i=0;i<e.results.length;i++){ texto += e.results[i][0].transcript; }
+    document.getElementById('gem-input').value = texto;
+  };
+  gemRecognition.onerror = ()=>{ micBtn.classList.remove('listening'); gemRecognition=null; };
+  gemRecognition.onend = ()=>{
+    micBtn.classList.remove('listening');
+    gemRecognition = null;
+    // Auto-enviar si capturo algo
+    const inp = document.getElementById('gem-input');
+    if(inp.value.trim()) gemEnviar();
+  };
+  gemRecognition.start();
 }
 
 function gemSend(texto){
@@ -3043,6 +3090,24 @@ function setInputVal(id,val){
   el.dispatchEvent(new Event('change'));
 }
 
+let gemVozActiva = false;
+
+function gemToggleVoz(){
+  gemVozActiva = !gemVozActiva;
+  const btn = document.getElementById('gem-voice-toggle');
+  btn.innerHTML = gemVozActiva ? '&#x1F50A;' : '&#x1F507;';
+  if(!gemVozActiva && window.speechSynthesis) window.speechSynthesis.cancel();
+}
+
+function gemHablar(texto){
+  if(!gemVozActiva || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'es-AR';
+  u.rate = 1.05;
+  window.speechSynthesis.speak(u);
+}
+
 function agregarMensaje(txt,tipo){
   const msgs=document.getElementById('gem-msgs');
   const div=document.createElement('div');
@@ -3050,6 +3115,7 @@ function agregarMensaje(txt,tipo){
   div.textContent=txt;
   msgs.appendChild(div);
   scrollMsgs();
+  if(tipo==='bot') gemHablar(txt);
 }
 
 function scrollMsgs(){
