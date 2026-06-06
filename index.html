@@ -3133,8 +3133,16 @@ async function llamarGemini(texto){
   const resRecibis    = gv('res_recibis');
   const resCanjeTotal = gv('res_canje_total');
   const resPagoTotal  = gv('res_pago_total');
+  const resCanjeKilos = gv('res_canje_kilos');
+  const resPagoKilos  = gv('res_pago_kilos');
   const resGastosFlete = gv('res_g_flete_corto') !== '—' ? gv('res_g_flete_corto') : null;
   const resGastosFlLargo = gv('res_g_flete_largo') !== '—' ? gv('res_g_flete_largo') : null;
+  // Deuda e importe a cobrar ingresados (para explicar el reparto)
+  const ge = id => document.getElementById(id)?.value || '0';
+  const deudaUsdAct = ge('deuda_usd');
+  const deudaArsAct = ge('deuda_ars');
+  const cobrarUsdAct = ge('cobrar_usd');
+  const cobrarArsAct = ge('cobrar_ars');
   const hayCalculo = resRecibis !== '—' && resRecibis !== '';
 
   // Detalle COMPLETO de cada liquidación (canje 'c_' y pago 'p_') leído del DOM
@@ -3189,8 +3197,14 @@ async function llamarGemini(texto){
     + '\n- Total descontado (gastos+deuda): ' + resGastosNeg
     + '\n- LO QUE RECIBE EL PRODUCTOR: ' + resRecibis
     + (porTonelada ? '\n- Lo que recibe POR TONELADA: ' + porTonelada : '')
-    + '\n- Total canje: ' + resCanjeTotal
-    + '\n- Total pago efectivo: ' + resPagoTotal
+    + '\n\nREPARTO DE TONELADAS (importante para explicar la liquidación):'
+    + '\n- Toneladas totales necesarias: ' + resKilos + ' tn'
+    + '\n- Toneladas que van a CANJE (cancelan la deuda en dólares y pesos + gastos): ' + resCanjeKilos
+    + '\n- Toneladas que van a PAGO (cubren el saldo que el productor quiere cobrar): ' + resPagoKilos
+    + '\n- Deuda ingresada: ' + deudaUsdAct + ' USD y ' + deudaArsAct + ' ARS'
+    + '\n- Importe a cobrar ingresado: ' + cobrarUsdAct + ' USD y ' + cobrarArsAct + ' ARS'
+    + '\n- Total canje (valor): ' + resCanjeTotal
+    + '\n- Total pago efectivo (valor): ' + resPagoTotal
     + (detalleCompleto ? '\n\nDETALLE POR LIQUIDACIÓN (usá esto si te piden cómo se hizo el cálculo del canje o del pago):' + detalleCompleto : '')
     : 'RESULTADOS: aun no hay calculo (faltan datos minimos).';
 
@@ -3275,21 +3289,26 @@ LA APP CALCULA SOLA Y AL INSTANTE. No existe un boton de "calcular": apenas hay 
 FLUJO DE CONVERSACION — MUY IMPORTANTE:
 1. Cuando el usuario te da varios datos juntos (ej: "1000 tn de girasol a 440, comision 1.5%, flete directo 600km menos 10%, factor 115"), CARGÁ TODOS LOS CAMPOS en un solo turno sin omitir ninguno.
 
-2. PREGUNTÁ CON PRECISIÓN lo que falta para poder simular, una sola pregunta por turno, nombrando EXACTAMENTE el dato y dando un ejemplo. Primero detectá el modo:
+2. PREGUNTÁ CON PRECISIÓN lo que falta, una sola pregunta por turno, nombrando EXACTAMENTE el dato y dando un ejemplo. Primero detectá el modo:
    - Si el usuario dice cuántas toneladas tiene ("tengo 800 tn", "voy a vender 1000 toneladas") → modo "kilos". Datos mínimos: grano, toneladas y precio.
-   - Si el usuario quiere saber cuántas toneladas necesita para cubrir una deuda o un importe ("cuánto tengo que vender para cancelar...", "cuántas tn para cobrar...") → modo "importe". Datos mínimos: grano, precio y la deuda y/o el importe a cobrar.
-   Revisá el ESTADO ACTUAL DE LA APP (más abajo): ahí ves qué campos ya están cargados y cuáles están vacíos. Pedí SOLO lo que realmente falta. No vuelvas a pedir algo que ya está cargado.
+   - Si el usuario quiere saber cuántas toneladas necesita para cubrir una deuda o un importe a cobrar ("cuánto tengo que vender para cancelar...", "cuántas tn para cobrar...") → modo "importe". Datos mínimos: grano, precio y la deuda y/o el importe a cobrar.
+   Revisá el ESTADO ACTUAL DE LA APP (más abajo): ahí ves qué campos ya están cargados y cuáles vacíos. Pedí SOLO lo que falta. No vuelvas a pedir algo ya cargado.
    Ejemplos de cómo preguntar bien (uno por vez, concreto):
    - "Me falta el precio. ¿A cuántos dólares por tonelada lo estás vendiendo?"
    - "¿Cuántas toneladas son?"
    - "¿Qué grano es: soja, maíz, trigo, cebada o girasol?"
-   - "Para verlo en pesos necesito el tipo de cambio. ¿Cuál es el comprador, o me pasás comprador y vendedor (por ejemplo 1400 y 1420)?"
-   - En modo importe: "¿De cuánto es la deuda que querés cancelar?" o "¿Cuánto querés cobrar en mano?"
-   Si faltan varios datos, pedí el más importante primero (grano, después toneladas o importe, después precio) y seguí en los próximos turnos. Nunca encimes preguntas.
+   - En modo importe: "¿De cuánto es la deuda que querés cancelar?" y "¿Cuánto querés cobrar en mano?"
 
-3. Apenas tengas el mínimo, en el ESTADO ACTUAL vas a ver los RESULTADOS CALCULADOS. SIEMPRE decile el resultado al usuario en el "mensaje", en texto plano y sin asteriscos, así:
-   "Por las 800 toneladas cobrás aproximadamente {LO QUE RECIBE} en total. El bruto es {bruto} y se descuentan {total descontado} de gastos y retenciones."
-   Después ofrecé seguir cargando lo opcional: "¿Querés que sume comisión, flete, humedad o alguna deducción más?"
+2b. ANTES DE DAR EL RESULTADO FINAL, asegurate de haber preguntado SIEMPRE estas tres cosas (una por turno, salvo que el usuario ya las haya dicho):
+   a) Tipo de cambio: "¿Qué tipo de cambio usamos? Pasame el comprador, o comprador y vendedor (por ejemplo 1400 y 1420)."
+   b) Comisión: "¿Qué comisión te cobran? (por ejemplo 1,5 o 2 por ciento)"
+   c) Condiciones de recibo: "¿Querés sumar alguna condición de recibo, como humedad, paritarias, secada, fumigada o flete? ¿O lo dejamos así?"
+   No las amontones: preguntá una, esperá la respuesta, y seguí con la siguiente. Si el usuario ya dio alguna, no la repitas.
+
+3. Cuando tengas el mínimo, en el ESTADO ACTUAL vas a ver los RESULTADOS CALCULADOS y el REPARTO DE TONELADAS. Al dar el resultado, EXPLICÁ CLARO el reparto, en texto plano sin asteriscos, así:
+   "Necesitás en total {toneladas totales} toneladas. De esas, {tn canje} toneladas van a canje para cancelar la deuda (los {deuda} en dólares y pesos) más los gastos, y {tn pago} toneladas van a pago para cubrir el saldo que querés cobrar de {importe a cobrar}."
+   Si no hay deuda, no menciones canje por deuda; si no hay importe a cobrar, no menciones el pago. Adaptá la explicación a lo que realmente cargó el usuario.
+   Después ofrecé seguir: "¿Querés que ajuste algo o agregamos otra condición?"
    Si te preguntan "por tonelada", usá el valor por tonelada que figura en el estado (no lo calcules de memoria).
 4. Si el usuario pide el detalle ("¿cómo se calculó?", "desglosame", "qué se descontó", "cómo se hizo la liquidación de canje", "explicame el pago"), explicá CADA ítem usando los valores del estado. En el estado tenés DOS niveles:
    - los totales generales (bruto, deducciones, retenciones, lo que recibe), y
