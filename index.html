@@ -3024,9 +3024,13 @@ function gemSend(texto){
   llamarGemini(texto).then(resp=>{
     document.getElementById('gem-loading')?.remove();
     procesarRespuesta(resp);
-  }).catch(()=>{
+  }).catch((e)=>{
     document.getElementById('gem-loading')?.remove();
-    agregarMensaje('Error al conectar con Gemini. Verifica tu conexion.','error');
+    if((''+e).includes('429')){
+      agregarMensaje('Esperá unos segundos, fuiste muy rápido. Probá de nuevo en un momento.','error');
+    } else {
+      agregarMensaje('Error al conectar con Gemini. Verifica tu conexion.','error');
+    }
   });
 }
 
@@ -3082,7 +3086,7 @@ Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'
   // Agregar turno del usuario al historial
   gemHistorial.push({role:'user', parts:[{text: texto}]});
 
-  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
+  const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key='+GEMINI_KEY,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
