@@ -2927,7 +2927,7 @@ if('serviceWorker' in navigator){
   }
 </style>
 
-<button id="gemini-btn" onclick="toggleGemini()" title="Asistente Gemini">
+<button id="gemini-btn" onclick="toggleGemini()" title="Liza, asistente de liquidación">
   <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
     <path d="M12 3.5c-1.5 3.5-5 5-8.5 5C4.5 13 7 16.5 12 20.5c5-4 7.5-7.5 8.5-12C17 8.5 13.5 7 12 3.5z" fill="white"/>
   </svg>
@@ -2936,12 +2936,12 @@ if('serviceWorker' in navigator){
 <div id="gemini-panel">
   <div class="gem-head">
     <svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3.5c-1.5 3.5-5 5-8.5 5C4.5 13 7 16.5 12 20.5c5-4 7.5-7.5 8.5-12C17 8.5 13.5 7 12 3.5z" fill="white"/></svg>
-    <span>Asistente Gemini</span>
+    <span>Liza</span>
     <button id="gem-voice-toggle" onclick="gemToggleVoz()" title="Activar/desactivar voz" style="font-size:18px">&#x1F507;</button>
     <button onclick="toggleGemini()">&#x2715;</button>
   </div>
   <div class="gem-msgs" id="gem-msgs">
-    <div class="gem-msg bot">Hola! ¿Qué tipo de operación necesitás hacer? Contame y lo hacemos.</div>
+    <div class="gem-msg bot">Hola, soy Liza. ¿Qué operación querés hacer? Contame con calma.</div>
   </div>
   <div class="gem-actions" id="gem-chips" style="display:none"></div>
   <div class="gem-input-row">
@@ -3009,7 +3009,7 @@ function gemMic(){
 function gemReiniciar(){
   gemHistorial = [];
   const msgs = document.getElementById('gem-msgs');
-  msgs.innerHTML = '<div class="gem-msg bot">Hola! ¿Qué tipo de operación necesitás hacer? Contame y lo hacemos.</div>';
+  msgs.innerHTML = '<div class="gem-msg bot">Hola, soy Liza. ¿Qué operación querés hacer? Contame con calma.</div>';
   scrollMsgs();
 }
 
@@ -3101,7 +3101,15 @@ async function llamarGemini(texto){
     + '\n- Total pago efectivo: ' + resPagoTotal
     : 'RESULTADOS: aun no hay calculo (faltan datos minimos).';
 
-  const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina. Hablas de forma natural, amable y argentina.
+  const sistema = `Te llamás Liza, sos la asistente de una app de liquidacion de granos en Argentina. Hablás de forma natural, amable y argentina.
+
+TU PERSONALIDAD Y TONO:
+- Sos tranquila, suave y paciente. No apurás al usuario.
+- Hablás pausado y claro, con frases cortas y cálidas.
+- Hacés UNA pregunta por vez y le das lugar a que termine de responder. Nunca encimás varias preguntas juntas.
+- No sos efusiva ni exagerada: evitá signos de exclamación de más y frases tipo "¡Excelente!", "¡Perfecto!". Mejor un "Listo", "Bien", "Genial", "De acuerdo" tranquilo.
+- Si el usuario está cargando datos de a poco, acompañás sin presionar.
+- Si te presentás, decí algo simple como "Hola, soy Liza. ¿Qué operación querés hacer? Contame con calma."
 
 Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas TODOS los datos que te da en un mismo mensaje, completas los campos correspondientes, y recien ahi preguntás lo que falta (UNA cosa por vez). NUNCA ignores datos que el usuario ya te dio.
 
@@ -3423,20 +3431,51 @@ function setFleteCampo(id, valor, moneda){
 }
 
 let gemVozActiva = false;
+let gemVozPreferida = null;
+
+// Elige una voz femenina en español, la más natural disponible
+function gemElegirVoz(){
+  if(!window.speechSynthesis) return null;
+  const voces = window.speechSynthesis.getVoices();
+  if(!voces.length) return null;
+  const esEsp = v => /es(-|_)?/i.test(v.lang);
+  const espanolas = voces.filter(esEsp);
+  // Preferencias: voces femeninas naturales conocidas, luego es-AR, luego cualquier español
+  const preferidas = ['mónica','monica','paulina','helena','elvira','google español','microsoft','femenin','mujer','female'];
+  for(const p of preferidas){
+    const m = espanolas.find(v => (v.name+'').toLowerCase().includes(p));
+    if(m) return m;
+  }
+  const ar = espanolas.find(v => /es(-|_)?AR/i.test(v.lang));
+  return ar || espanolas[0] || null;
+}
 
 function gemToggleVoz(){
   gemVozActiva = !gemVozActiva;
   const btn = document.getElementById('gem-voice-toggle');
   btn.innerHTML = gemVozActiva ? '&#x1F50A;' : '&#x1F507;';
   if(!gemVozActiva && window.speechSynthesis) window.speechSynthesis.cancel();
+  // Cargar la voz preferida (puede tardar en estar disponible)
+  if(gemVozActiva && window.speechSynthesis && !gemVozPreferida){
+    gemVozPreferida = gemElegirVoz();
+  }
+}
+
+// Algunas plataformas cargan las voces de forma asíncrona
+if(window.speechSynthesis){
+  window.speechSynthesis.onvoiceschanged = () => { gemVozPreferida = gemElegirVoz(); };
 }
 
 function gemHablar(texto){
   if(!gemVozActiva || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
+  if(!gemVozPreferida) gemVozPreferida = gemElegirVoz();
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'es-AR';
-  u.rate = 1.05;
+  if(gemVozPreferida) u.voice = gemVozPreferida;
+  u.rate = 0.95;   // un poco más pausada, tranquila
+  u.pitch = 1.05;  // tono levemente más cálido
+  u.volume = 1;
   window.speechSynthesis.speak(u);
 }
 
