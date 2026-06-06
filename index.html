@@ -3147,15 +3147,21 @@ Si el usuario menciona km (ej: "flete corto 50 km", "flete directo 300 km", "fle
 - flete_largo_aj: ajuste % del flete largo. Igual que arriba, puede ser negativo.
 Cuando uses km NO cargues el monto de tarifa del mismo flete.
 
+LA APP CALCULA SOLA Y AL INSTANTE. No existe un boton de "calcular": apenas hay grano + toneladas + precio, los resultados ya estan listos en el ESTADO ACTUAL DE LA APP (mas abajo). Por eso:
+- Si el usuario dice "calculá", "podes calcular", "cuanto cobro", "cuanto me queda", "cuanto por tonelada" → NO pidas mas datos ni digas "voy a calcular". LEÉ los RESULTADOS CALCULADOS del estado actual y deciselos directamente.
+- Si en el estado actual figura "RESULTADOS CALCULADOS", esos numeros son la respuesta. Usalos SIEMPRE.
+
 FLUJO DE CONVERSACION — MUY IMPORTANTE:
-1. Cuando el usuario te da muchos datos juntos (ej: "30 tn de girasol a 440 con flete directo 500km menos 10%, comision 2%, factor 115%"), CARGÁ TODOS LOS CAMPOS en un solo turno sin omitir ninguno.
-2. Luego fijate que falta del minimo obligatorio: grano + toneladas + precio. Si falta alguno, preguntá (uno por vez).
-3. Cuando ya tengas el minimo y la app calculó, SIEMPRE decile el resultado al usuario en el mensaje. Leé los valores del ESTADO ACTUAL DE LA APP que te paso abajo y resumilos así:
-   "Calculé: bruto $ X → gastos/deducciones/retenciones − $ Y → **te quedan $ Z** (u$s W)"
-   Siempre mostrá al menos: bruto, total descontado, y lo que recibe.
-4. Si el usuario te pide el detalle ("¿cómo se calculó?", "¿qué se descontó?", "desglosame"), explicá cada ítem usando los valores del estado actual: gastos de recibo, deducciones (comisión, sellos, derecho), retenciones (IVA, IIBB, Ganancias), flete, etc.
-   NUNCA respondas "no tengo el detalle" o "mirá la app". Los datos están en el estado actual que te paso.
-5. Si el usuario dice "listo" o "es todo", cerrá amablemente con un resumen final.
+1. Cuando el usuario te da muchos datos juntos (ej: "1000 tn de girasol a 440, comision 1.5%, flete directo 600km menos 10%, factor 115"), CARGÁ TODOS LOS CAMPOS en un solo turno sin omitir ninguno.
+2. Fijate que falta del minimo obligatorio: grano + toneladas + precio. Si falta alguno, preguntá (uno por vez). El tipo de cambio (tc) tambien hace falta para ver pesos; si no lo tenes, pedilo.
+3. Apenas tengas los datos, en el ESTADO ACTUAL vas a ver los RESULTADOS CALCULADOS. SIEMPRE deciles el resultado al usuario en el "mensaje", con este formato:
+   "Por las {toneladas} tn cobrás aprox **{LO QUE RECIBE}** en total. Bruto {bruto}, menos gastos y retenciones por {total descontado}."
+   Si te preguntan "por tonelada", divididlo: lo que recibe ÷ toneladas.
+4. Si el usuario pide el detalle ("¿cómo se calculó?", "desglosame", "que se descontó"), explicá CADA item usando los valores del estado: gastos de recibo, flete, comisión, sellos, derecho, IVA, IIBB, Ganancias.
+   NUNCA respondas "no tengo el detalle" o "mirá la app". Los numeros estan en el estado actual.
+5. Si el usuario te corrige ("pusiste kilo en vez de toneladas", "esta mal el flete"), reconocé el error, confirmá el dato correcto y volvé a dar el resultado. NUNCA respondas con campos vacios y sin mensaje.
+6. El campo "mensaje" NUNCA puede ir vacio. Siempre escribí algo util y claro para el usuario.
+7. Si el usuario dice "listo" o "es todo", cerrá con un resumen final del resultado.
 
 MUY IMPORTANTE - cuando NO entiendas o el usuario diga algo confuso:
 - NUNCA respondas solo "no entendi" o mandes el mensaje generico de bienvenida.
@@ -3205,11 +3211,21 @@ function procesarRespuesta(texto){
     if(m){ try{ obj = JSON.parse(m[0]); }catch(e2){} }
   }
   if(!obj){
-    // Mostrar lo que el modelo dijo y guardar en historial para no perder el contexto
-    const limpio = clean.replace(/[{}\[\]"]/g,'').trim();
-    const msgFallback = limpio.length > 8
-      ? limpio
-      : '\u00bfMe podés contar un poco más? No entendí bien lo que quisiste decir. Contame, por ejemplo, el grano, las toneladas y el precio que tenés.';
+    // El JSON vino roto. Intentar rescatar SOLO el texto del campo "mensaje".
+    let msgFallback = '';
+    const mm = clean.match(/"mensaje"\s*:\s*"([^"]*)"/);
+    if(mm && mm[1]){
+      msgFallback = mm[1];
+    } else {
+      // Si no hay campo mensaje, y el texto no parece JSON, mostrarlo tal cual
+      const pareceJson = /[{}\[\]]|"campos"|"mensaje"/.test(clean);
+      if(!pareceJson && clean.length > 3){
+        msgFallback = clean;
+      }
+    }
+    if(!msgFallback || msgFallback.length < 2){
+      msgFallback = 'Perdón, se me cruzó algo. ¿Me lo repetís? Por ejemplo: "1000 tn de girasol a 440 dólares, comisión 1,5%".';
+    }
     agregarMensaje(msgFallback, 'bot');
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje: msgFallback})}]});
     return;
@@ -3256,7 +3272,18 @@ function procesarRespuesta(texto){
     if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
   }
   if(typeof calcular==='function') calcular();
-  agregarMensaje(obj.mensaje || 'Listo.','bot');
+  // Si Gemini no mando mensaje, armar uno con el resultado recien calculado
+  let msg = (obj.mensaje || '').trim();
+  if(!msg){
+    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+    const recibis = gv('res_recibis');
+    if(recibis && recibis !== '—'){
+      msg = 'Listo. Cobrás aproximadamente ' + recibis + ' en total. Si querés te detallo el cálculo.';
+    } else {
+      msg = 'Cargué los datos. ¿Querés agregar algo más o te muestro el resultado?';
+    }
+  }
+  agregarMensaje(msg,'bot');
 }
 
 function setInputVal(id,val){
