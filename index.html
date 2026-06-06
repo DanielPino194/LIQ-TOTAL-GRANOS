@@ -2973,7 +2973,8 @@ function gemEnviar(){
 // ── Reconocimiento de voz ──
 let gemRecognition = null;
 let gemMicActivo = false;
-let gemTextoFinal = '';
+let gemTextoPrevio = '';
+let gemSesionActual = '';
 let gemDetenerManual = false;
 let gemReintentos = 0;
 
@@ -2997,7 +2998,8 @@ function gemMic(){
   gemRecognition.maxAlternatives = 1;
 
   gemMicActivo = false;
-  gemTextoFinal = '';      // acumula lo ya reconocido como definitivo
+  gemTextoPrevio = '';     // texto de sesiones previas (tras reinicios por pausa)
+  gemSesionActual = '';    // texto de la sesión de escucha actual
   gemDetenerManual = false; // true cuando el usuario toca para terminar
   gemReintentos = 0;
 
@@ -3008,15 +3010,18 @@ function gemMic(){
     if(inp){ inp.dataset.ph = inp.placeholder; inp.placeholder = 'Escuchando... tocá el micrófono para terminar'; }
   };
   gemRecognition.onresult = (e)=>{
-    let interim = '';
-    // acumular resultados FINALES y mostrar los parciales en vivo
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      const tr = e.results[i][0].transcript;
-      if(e.results[i].isFinal){ gemTextoFinal += tr + ' '; }
-      else { interim += tr; }
+    // Reconstruir el texto de ESTA sesión completo desde el índice 0
+    // (NO acumular con +=, porque al reanudar el motor re-emite todo y duplicaría)
+    let sesion = '';
+    for(let i=0;i<e.results.length;i++){
+      sesion += e.results[i][0].transcript + ' ';
     }
+    sesion = sesion.replace(/\s+/g,' ').trim();
+    // gemTextoPrevio = lo dicho en sesiones anteriores (antes de un reinicio por pausa)
+    const completo = (gemTextoPrevio + ' ' + sesion).replace(/\s+/g,' ').trim();
     const inp = document.getElementById('gem-input');
-    if(inp) inp.value = (gemTextoFinal + interim).trim();
+    if(inp) inp.value = completo;
+    gemSesionActual = sesion;
   };
   gemRecognition.onerror = (ev)=>{
     const err = ev && ev.error;
@@ -3036,8 +3041,11 @@ function gemMic(){
     gemRecognition = null;
   };
   gemRecognition.onend = ()=>{
-    // Si el usuario NO tocó para terminar, fue un corte automático por pausa:
-    // reanudamos para que pueda seguir hablando (con límite de reintentos).
+    // Al cortarse (por pausa), pasamos lo de esta sesión a "previo" y reanudamos
+    if(gemSesionActual){
+      gemTextoPrevio = (gemTextoPrevio + ' ' + gemSesionActual).replace(/\s+/g,' ').trim();
+      gemSesionActual = '';
+    }
     if(!gemDetenerManual && gemMicActivo && gemReintentos < 50){
       gemReintentos++;
       try{ gemRecognition.start(); return; }catch(e){}
@@ -3110,7 +3118,13 @@ function gemBorrarTodo(){
   // Destino a auto
   if(typeof setDest==='function') setDest('auto');
   if(typeof calcular==='function') calcular();
-  // NO reinicia el chat: el historial y los mensajes se mantienen
+  // Avisar a Gemini que los datos se borraron, para que NO arrastre los viejos.
+  // Mantenemos el hilo del chat, pero marcamos un corte de operación en el historial.
+  if(Array.isArray(gemHistorial)){
+    gemHistorial.push({role:'user', parts:[{text:'(Sistema: se borraron todos los datos de la operación anterior. Los campos volvieron a sus valores por defecto: precio 380 dólares, factor 100, comisión 2 por ciento, grano soja, tipo de cambio 1400/1420, sin toneladas, sin deuda y sin importe a cobrar. Olvidá por completo los números de la operación anterior. Para la nueva operación esperá a que el usuario te dé los datos otra vez y no reutilices ningún valor previo.)'}]});
+    gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'Listo, borré todo. Arrancamos de cero. ¿Qué operación querés hacer?'})}]});
+  }
+  // NO reinicia el chat visual: los mensajes se mantienen
 }
 
 function gemSend(texto, silencioso){
@@ -3313,7 +3327,7 @@ LA APP CALCULA SOLA Y AL INSTANTE. No existe un boton de "calcular": apenas hay 
 - Si en el estado actual figura "RESULTADOS CALCULADOS", esos numeros son la respuesta. Usalos SIEMPRE.
 
 FLUJO DE CONVERSACION — MUY IMPORTANTE:
-1. Cuando el usuario te da varios datos juntos (ej: "1000 tn de girasol a 440, comision 1.5%, flete directo 600km menos 10%, factor 115"), CARGÁ TODOS LOS CAMPOS en un solo turno sin omitir ninguno.
+1. Cuando el usuario te da varios datos juntos en su PRIMER mensaje de la operación (ej: "1000 tn de girasol a 440, comision 1.5%, flete directo 600km menos 10%, factor 115"), cargá todos esos campos juntos en ese turno. En los turnos siguientes, mandá solo lo que el usuario cambie o agregue (ver la REGLA CLAVE sobre "campos" más abajo).
 
 2. PREGUNTÁ CON PRECISIÓN lo que falta, una sola pregunta por turno, nombrando EXACTAMENTE el dato y dando un ejemplo. Primero detectá el modo:
    - Si el usuario dice cuántas toneladas tiene ("tengo 800 tn", "voy a vender 1000 toneladas") → modo "kilos". Datos mínimos: grano, toneladas y precio.
@@ -3371,9 +3385,14 @@ MUY IMPORTANTE - cuando NO entiendas o el usuario diga algo confuso:
 
 Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
 {
-  "campos": { ...todos los datos mencionados en este turno (puede ir vacio {}) },
+  "campos": { ...SOLO los datos que el usuario dijo o cambió EN ESTE turno },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
+REGLA CLAVE sobre "campos": poné ÚNICAMENTE los campos que el usuario mencionó o modificó en este último mensaje. NO repitas datos que ya estaban cargados de turnos anteriores. Ejemplos:
+- Usuario: "cambiá el precio a 450" → campos: { "precio": 450 } (NADA MÁS, no repitas grano, toneladas, etc.)
+- Usuario: "el tipo de cambio ahora es 1450" → campos: { "tc": 1450 }
+- Usuario: "1000 tn de girasol a 440, comisión 2%" → campos con esos tres datos juntos (es la carga inicial).
+La app ya recuerda lo anterior; si repetís todo, se pisan valores y se rompe el cálculo. Cuando es una corrección o un cambio, mandá solo lo que cambia.
 Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf.
 
 Estado actual de la app:
