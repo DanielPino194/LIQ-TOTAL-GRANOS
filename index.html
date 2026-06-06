@@ -2973,6 +2973,9 @@ function gemEnviar(){
 // ── Reconocimiento de voz ──
 let gemRecognition = null;
 let gemMicActivo = false;
+let gemTextoFinal = '';
+let gemDetenerManual = false;
+let gemReintentos = 0;
 
 function gemMic(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2981,32 +2984,47 @@ function gemMic(){
     return;
   }
   const micBtn = document.getElementById('gem-mic');
-  // Si ya está escuchando, detener
+  // Si ya está escuchando, el usuario toca para TERMINAR a propósito
   if(gemRecognition){
+    gemDetenerManual = true;
     try{ gemRecognition.stop(); }catch(e){}
     return;
   }
   gemRecognition = new SR();
   gemRecognition.lang = 'es-AR';
-  gemRecognition.continuous = false;
+  gemRecognition.continuous = true;      // escucha de corrido, no corta al primer silencio
   gemRecognition.interimResults = true;
   gemRecognition.maxAlternatives = 1;
 
   gemMicActivo = false;
+  gemTextoFinal = '';      // acumula lo ya reconocido como definitivo
+  gemDetenerManual = false; // true cuando el usuario toca para terminar
+  gemReintentos = 0;
 
-  gemRecognition.onstart = ()=>{ gemMicActivo = true; micBtn.classList.add('listening'); };
+  gemRecognition.onstart = ()=>{
+    gemMicActivo = true;
+    micBtn.classList.add('listening');
+    const inp = document.getElementById('gem-input');
+    if(inp){ inp.dataset.ph = inp.placeholder; inp.placeholder = 'Escuchando... tocá el micrófono para terminar'; }
+  };
   gemRecognition.onresult = (e)=>{
-    let texto = '';
-    for(let i=0;i<e.results.length;i++){ texto += e.results[i][0].transcript; }
-    document.getElementById('gem-input').value = texto;
+    let interim = '';
+    // acumular resultados FINALES y mostrar los parciales en vivo
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const tr = e.results[i][0].transcript;
+      if(e.results[i].isFinal){ gemTextoFinal += tr + ' '; }
+      else { interim += tr; }
+    }
+    const inp = document.getElementById('gem-input');
+    if(inp) inp.value = (gemTextoFinal + interim).trim();
   };
   gemRecognition.onerror = (ev)=>{
-    micBtn.classList.remove('listening');
     const err = ev && ev.error;
+    // "no-speech" en modo continuo no debe cortar: a veces salta tras una pausa larga
+    if(err === 'no-speech'){ return; }
+    micBtn.classList.remove('listening');
     if(err === 'not-allowed' || err === 'service-not-allowed'){
       agregarMensaje('Necesito permiso para usar el micrófono. Tocá el candado en la barra del navegador y permití el micrófono, o revisá los permisos del navegador en el celular.','error');
-    } else if(err === 'no-speech'){
-      agregarMensaje('No te escuché. Probá de nuevo y hablá cerca del micrófono.','error');
     } else if(err === 'audio-capture'){
       agregarMensaje('No encuentro el micrófono. Fijate que ninguna otra app lo esté usando.','error');
     } else if(err === 'network'){
@@ -3014,14 +3032,22 @@ function gemMic(){
     } else if(err !== 'aborted'){
       agregarMensaje('No pude activar el micrófono ahora. Probá escribir el mensaje.','error');
     }
+    gemDetenerManual = true;
     gemRecognition = null;
   };
   gemRecognition.onend = ()=>{
+    // Si el usuario NO tocó para terminar, fue un corte automático por pausa:
+    // reanudamos para que pueda seguir hablando (con límite de reintentos).
+    if(!gemDetenerManual && gemMicActivo && gemReintentos < 50){
+      gemReintentos++;
+      try{ gemRecognition.start(); return; }catch(e){}
+    }
     micBtn.classList.remove('listening');
     gemRecognition = null;
-    // Auto-enviar si capturó algo
     const inp = document.getElementById('gem-input');
-    if(inp && inp.value.trim()) gemEnviar();
+    if(inp && inp.dataset.ph){ inp.placeholder = inp.dataset.ph; }
+    // Enviar lo capturado solo cuando el usuario terminó a propósito
+    if(gemDetenerManual && inp && inp.value.trim()) gemEnviar();
   };
 
   // En móvil conviene pedir el permiso de micrófono explícitamente antes de arrancar
