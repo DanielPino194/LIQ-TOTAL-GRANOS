@@ -3151,11 +3151,22 @@ function procesarRespuesta(texto){
     return;
   }
   const c = obj.campos || {};
-  if(c.modo && typeof setModo==='function') setModo(c.modo);
+  if(c.modo && typeof setModo==='function'){
+    setModo(c.modo);
+    // limpiar los campos del modo que NO corresponde para que no ensucien el calculo
+    if(c.modo==='importe'){
+      // por importe: no usar toneladas
+      setInputVal('k_total', 0);
+    } else if(c.modo==='kilos'){
+      // por tonelada: no usar deuda ni importe a cobrar
+      setInputVal('deuda_usd', 0); setInputVal('deuda_ars', 0);
+      setInputVal('cobrar_usd', 0); setInputVal('cobrar_ars', 0);
+    }
+  }
   if(c.dest && typeof setDest==='function') setDest(c.dest);
   if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
   if(c.precio!==undefined) setInputVal('precio',c.precio);
-  if(c.k_total!==undefined){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); }
+  if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); }
   if(c.tc!==undefined) setInputVal('tc',c.tc);
   if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
   if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
