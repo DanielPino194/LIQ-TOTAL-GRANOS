@@ -1607,7 +1607,9 @@ function toggleCurr(id){
 // ─── Modo / Dest ─────────────────────────────────────────────────────
 let modo='importe', dest='auto';
 
-function setModo(m){
+function setModo(m, opts){
+  const limpiarOtros = !(opts && opts.noClear);
+  const modoAnterior = modo;
   modo=m;
   document.getElementById('mode_importe').classList.toggle('active',m==='importe');
   document.getElementById('mode_kilos').classList.toggle('active',m==='kilos');
@@ -1616,6 +1618,13 @@ function setModo(m){
   document.querySelectorAll('.sec-importe-only').forEach(s=>{
     s.style.display = m==='importe' ? '' : 'none';
   });
+  // Al cambiar de modo (manualmente), cada modo arranca limpio
+  if(limpiarOtros && modoAnterior !== m){
+    const limpiar = id => { const el=document.getElementById(id); if(el){ el.value='0'; el.dispatchEvent(new Event('input')); } };
+    limpiar('deuda_usd'); limpiar('deuda_ars');
+    limpiar('cobrar_usd'); limpiar('cobrar_ars');
+    limpiar('k_total');
+  }
   calcular();
 }
 
@@ -2787,7 +2796,7 @@ function cargarEstado(){
       }
     });
     // modos
-    if(state.__modo) setModo(state.__modo);
+    if(state.__modo) setModo(state.__modo, {noClear:true});
     if(state.__dest) setDest(state.__dest);
     if(state.__fcModo) setFCModo(state.__fcModo);
     if(state.__fleteLargoTipo) setFleteTipo(state.__fleteLargoTipo);
@@ -3047,19 +3056,26 @@ async function llamarGemini(texto){
 
 Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas lo que te dice, completas los campos, y le vas preguntando UNA cosa por vez lo que falta. NUNCA cierres la conversacion de golpe si todavia faltan datos importantes.
 
-LA APP TIENE DOS MODOS DE CALCULO (vos elegis cual segun lo que pida el usuario):
+LA APP TIENE DOS MODOS DE CALCULO. Elegí cual segun lo que pida el usuario y seteá el campo "modo":
 
-MODO "kilos" (por tonelada) - calculo directo:
-El usuario TIENE una cantidad de toneladas y quiere el resultado. Usalo cuando diga "tengo 500 toneladas", "vendi 500 tn", "entregue 500 toneladas".
-- Necesitas: grano, k_total (toneladas), precio.
+MODO "importe" (por importe) - CALCULO INVERSO (cuantas toneladas necesito):
+Usalo cuando el usuario quiere saber CUANTAS TONELADAS necesita para cubrir una deuda y/o un importe a cobrar.
+Ejemplos: "cuantas toneladas para cancelar 20000 dolares", "cuanto tengo que vender para cancelar 3 millones de pesos y cobrar 500 mil".
+- Datos: grano, precio, y deuda (deuda_usd/deuda_ars) y/o importe a cobrar (cobrar_usd/cobrar_ars).
+- NO pidas ni cargues toneladas (k_total): la app las calcula.
 
-MODO "importe" (por importe) - calculo INVERSO:
-El usuario quiere saber CUANTAS TONELADAS NECESITA para cubrir una deuda o un importe a cobrar. Usalo cuando diga "cuantas toneladas necesito para cancelar X", "cuanto tengo que vender para cobrar Y".
-- Necesitas: grano, precio, y la deuda (deuda_usd/deuda_ars) y/o el importe a cobrar (cobrar_usd/cobrar_ars).
-- NO pidas toneladas en este modo: la app las calcula sola.
-- Destino opcional (campo "dest"): "auto" (default), "canje" o "pago".
+MODO "kilos" (por tonelada) - CALCULO DIRECTO (tengo X toneladas):
+Usalo cuando el usuario YA TIENE una cantidad de toneladas y quiere saber el resultado.
+Ejemplos: "tengo 500 toneladas de soja a 380", "vendo 1000 tn y debo 20000 dolares".
+- Datos: grano, k_total (toneladas), precio. Puede ademas tener deuda (deuda_usd/deuda_ars) que se descuenta del resultado.
 
-Siempre seteá el campo "modo" ("kilos" o "importe") segun la intencion que detectes.
+DESTINO (campo "dest", aplica a AMBOS modos): define como se cancela la deuda y los gastos:
+- "auto" (default): se cancelan los gastos primero; si sobra, se paga el resto.
+- "canje": se cancelan gastos Y deuda en canje; si sobra, queda saldo en cuenta corriente (en dolares), no cobrable en efectivo. Tiene el beneficio del canje.
+- "pago": se cancela todo igual pero SIN el beneficio del canje; si sobra, se paga en efectivo.
+Si el usuario dice "todo canje" usá "canje", "todo pago" usá "pago", sino "auto".
+
+MONEDAS: si un monto esta en pesos usa el campo _ars; si esta en dolares usa _usd. "3 millones de pesos"=3000000, "20 mil dolares"=20000.
 
 CAMPOS QUE PODES COMPLETAR:
 Datos principales:
@@ -3151,18 +3167,7 @@ function procesarRespuesta(texto){
     return;
   }
   const c = obj.campos || {};
-  if(c.modo && typeof setModo==='function'){
-    setModo(c.modo);
-    // limpiar los campos del modo que NO corresponde para que no ensucien el calculo
-    if(c.modo==='importe'){
-      // por importe: no usar toneladas
-      setInputVal('k_total', 0);
-    } else if(c.modo==='kilos'){
-      // por tonelada: no usar deuda ni importe a cobrar
-      setInputVal('deuda_usd', 0); setInputVal('deuda_ars', 0);
-      setInputVal('cobrar_usd', 0); setInputVal('cobrar_ars', 0);
-    }
-  }
+  if(c.modo && typeof setModo==='function') setModo(c.modo);
   if(c.dest && typeof setDest==='function') setDest(c.dest);
   if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
   if(c.precio!==undefined) setInputVal('precio',c.precio);
