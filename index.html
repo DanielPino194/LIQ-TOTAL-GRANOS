@@ -3436,37 +3436,49 @@ function setFleteCampo(id, valor, moneda){
 let gemVozActiva = false;
 let gemVozPreferida = null;
 
-// Elige una voz FEMENINA en español LATINO (evita acento de España)
+// Elige la voz MÁS NATURAL disponible: femenina, español latino, neural si la hay
 function gemElegirVoz(){
   if(!window.speechSynthesis) return null;
   const voces = window.speechSynthesis.getVoices();
   if(!voces.length) return null;
   const nombre = v => (v.name+'').toLowerCase();
+  const lang = v => (v.lang+'').toLowerCase();
+
   const esEspanol = v => /^es(-|_)?/i.test(v.lang);
-  const esLatino = v => /es(-|_)?(AR|MX|US|419|CO|CL|PE|UY|VE)/i.test(v.lang);
-  const esEspana = v => /es(-|_)?ES/i.test(v.lang);
-  // nombres típicos de voces masculinas a evitar
-  const esMasculina = v => /(jorge|diego|carlos|pablo|miguel|juan|male|hombre|masculin)/i.test(nombre(v));
-  // nombres típicos de voces femeninas latinas
-  const femLatinas = ['paulina','francisca','sabina','dalia','lupe','rosa','google español de estados unidos','female'];
+  const esLatino = v => /es(-|_)?(ar|mx|us|419|co|cl|pe|uy|ve|bo|py|ec|gt)/i.test(v.lang);
+  const esEspana = v => /es(-|_)?es/i.test(v.lang);
+  const esMasculina = v => /(jorge|diego|carlos|pablo|miguel|juan|alvaro|álvaro|gonzalo|liberto|tomás|tomas|andres|andrés|male|hombre|masculin)/i.test(nombre(v));
+  // motores de mejor calidad (menos robóticos)
+  const esNeural = v => /(natural|neural|online|wavenet|premium|enhanced)/i.test(nombre(v));
+  const esGoogle = v => /google/i.test(nombre(v));
+  const esMicrosoft = v => /microsoft/i.test(nombre(v));
+  // nombres femeninos latinos frecuentes
+  const femLatinas = /(paulina|francisca|sabina|dalia|lupe|rosa|renata|catalina|larissa|yolanda|gabriela|americalatina|female|mujer|femenin)/i;
 
   const espanolas = voces.filter(esEspanol);
   if(!espanolas.length) return null;
 
-  // 1) Voz latina, femenina por nombre conocido
-  for(const f of femLatinas){
-    const m = espanolas.find(v => esLatino(v) && nombre(v).includes(f) && !esMasculina(v));
-    if(m) return m;
+  // Puntaje: cuanto más alto, más natural y adecuada
+  function puntaje(v){
+    let p = 0;
+    if(esMasculina(v)) p -= 50;            // descartar masculinas
+    if(esNeural(v))    p += 40;            // lo que más mejora la naturalidad
+    if(esLatino(v))    p += 25;            // acento latino
+    else if(esEspana(v)) p -= 8;           // España: leve penalización
+    if(femLatinas.test(nombre(v))) p += 15;// nombre femenino conocido
+    if(/es(-|_)?(ar|mx|us)/i.test(v.lang)) p += 8; // dialectos preferidos
+    if(esGoogle(v))    p += 12;            // las de Google suelen ser buenas
+    if(esMicrosoft(v)) p += 6;
+    if(v.localService===false) p += 4;     // voces online suelen sonar mejor
+    return p;
   }
-  // 2) Cualquier voz latina que no sea claramente masculina
-  let m = espanolas.find(v => esLatino(v) && !esMasculina(v));
-  if(m) return m;
-  // 3) Voz en español (no España) no masculina
-  m = espanolas.find(v => !esEspana(v) && !esMasculina(v));
-  if(m) return m;
-  // 4) Última opción: cualquier española no masculina, o la primera
-  m = espanolas.find(v => !esMasculina(v));
-  return m || espanolas[0];
+
+  const ordenadas = espanolas
+    .map(v => ({v, p: puntaje(v)}))
+    .sort((a,b) => b.p - a.p);
+
+  // Si la mejor quedó con puntaje muy negativo (solo masculinas), igual devolvemos algo
+  return (ordenadas[0] && ordenadas[0].v) || espanolas[0];
 }
 
 function gemToggleVoz(){
@@ -3484,35 +3496,98 @@ if(window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged = () => { gemVozPreferida = gemElegirVoz(); };
 }
 
-// Limpia el texto para que la voz no lea asteriscos ni confunda monedas
+// Convierte un número entero (hasta miles de millones) a palabras en español
+function gemNumeroEnPalabras(n){
+  n = Math.round(n);
+  if(n===0) return 'cero';
+  if(n<0) return 'menos ' + gemNumeroEnPalabras(-n);
+  const unidades=['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve'];
+  const decenas=['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+  const centenas=['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+  function menor100(x){
+    if(x<30) return unidades[x];
+    const d=Math.floor(x/10), u=x%10;
+    return u===0 ? decenas[d] : decenas[d]+' y '+unidades[u];
+  }
+  function menor1000(x){
+    if(x<100) return menor100(x);
+    if(x===100) return 'cien';
+    const c=Math.floor(x/100), r=x%100;
+    return r===0 ? centenas[c] : centenas[c]+' '+menor100(r);
+  }
+  function seccion(x, singular, plural){
+    if(x===0) return '';
+    if(x===1) return singular;
+    return menor1000(x)+' '+plural;
+  }
+  let palabras='';
+  const millones=Math.floor(n/1000000);
+  const miles=Math.floor((n%1000000)/1000);
+  const resto=n%1000;
+  if(millones>0){
+    palabras += (millones===1 ? 'un millón' : menor1000(millones)+' millones');
+  }
+  if(miles>0){
+    palabras += (palabras?' ':'') + (miles===1 ? 'mil' : menor1000(miles)+' mil');
+  }
+  if(resto>0){
+    palabras += (palabras?' ':'') + menor1000(resto);
+  }
+  return palabras.trim();
+}
+
+// Convierte "1.400" o "1400" o "1.234.567,50" a palabras
+function gemMontoEnPalabras(str){
+  // quitar puntos de miles, dejar coma decimal
+  let limpio = (''+str).replace(/\./g,'').replace(/\s/g,'');
+  let [ent, dec] = limpio.split(',');
+  let entero = parseInt(ent.replace(/[^\d-]/g,''),10);
+  if(isNaN(entero)) return str;
+  let palabras = gemNumeroEnPalabras(entero);
+  if(dec && /\d/.test(dec)){
+    const decN = parseInt(dec.slice(0,2),10);
+    if(decN>0) palabras += ' con ' + gemNumeroEnPalabras(decN);
+  }
+  return palabras;
+}
+
+// Limpia y naturaliza el texto para que la voz suene como persona
 function gemLimpiarParaVoz(texto){
   let t = ' ' + texto + ' ';
   // Quitar markdown (asteriscos, guiones bajos, almohadillas, backticks)
   t = t.replace(/[*_`#~]/g, ' ');
-  // "/tn" o "por tn" → "por tonelada" (antes de tocar las monedas)
+  // Barras: "/tn", "440/tn", "1400/1420" (tc comprador/vendedor)
   t = t.replace(/\/\s*tn\b/gi, ' por tonelada');
   t = t.replace(/\/\s*kg\b/gi, ' por kilo');
-  // Monedas: convertir símbolos a palabras claras
-  // "u$s 1.234" / "US$ 1.234" / "USD 1.234" → "1234 dólares"
-  t = t.replace(/u\$s\s*([\d.,]+)/gi, '$1 dólares ');
-  t = t.replace(/us\$\s*([\d.,]+)/gi, '$1 dólares ');
-  t = t.replace(/usd\s*([\d.,]+)/gi, '$1 dólares ');
-  t = t.replace(/([\d.,]+)\s*(usd|u\$s|dolares|dólares)/gi, '$1 dólares ');
-  // "$ 1.234" o "$1.234" (peso argentino) → "1234 pesos"
-  t = t.replace(/\$\s*([\d.,]+)/g, '$1 pesos ');
-  t = t.replace(/([\d.,]+)\s*(ars|pesos)\b/gi, '$1 pesos ');
-  // Unidades
-  t = t.replace(/\btn\b/gi, ' toneladas');
-  t = t.replace(/([\d.,]+)\s*kg\b/gi, '$1 kilos');
-  t = t.replace(/([\d.,]+)\s*%/g, '$1 por ciento');
+  // tipo de cambio "1400/1420" → "mil cuatrocientos, mil cuatrocientos veinte"
+  t = t.replace(/(\d[\d.]*)\s*\/\s*(\d[\d.]*)/g, (m,a,b)=> gemMontoEnPalabras(a)+', '+gemMontoEnPalabras(b));
+  // cualquier otra barra suelta → "o"
+  t = t.replace(/\s*\/\s*/g, ' o ');
+  // Monedas con símbolo: convertir número a palabras + moneda
+  t = t.replace(/u\$s\s*([\d.,]+)/gi, (m,n)=> gemMontoEnPalabras(n)+' dólares ');
+  t = t.replace(/us\$\s*([\d.,]+)/gi, (m,n)=> gemMontoEnPalabras(n)+' dólares ');
+  t = t.replace(/usd\s*([\d.,]+)/gi, (m,n)=> gemMontoEnPalabras(n)+' dólares ');
+  t = t.replace(/([\d.,]+)\s*(usd|u\$s|dolares|dólares)/gi, (m,n)=> gemMontoEnPalabras(n)+' dólares ');
+  t = t.replace(/\$\s*([\d.,]+)/g, (m,n)=> gemMontoEnPalabras(n)+' pesos ');
+  t = t.replace(/([\d.,]+)\s*(ars|pesos)\b/gi, (m,n)=> gemMontoEnPalabras(n)+' pesos ');
+  // Porcentajes
+  t = t.replace(/([\d.,]+)\s*%/g, (m,n)=> gemMontoEnPalabras(n)+' por ciento');
   t = t.replace(/\b%/g, ' por ciento');
-  // Números con punto de miles: quitar el punto para que no lea "punto"
-  t = t.replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1');
-  t = t.replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1'); // segunda pasada para 1.234.567
-  // Corregir punto de fin de oración que quedó pegado: "30. dólares" → "30 dólares ."
-  t = t.replace(/(\d)\.\s+(dólares|pesos|toneladas|kilos|por ciento)/gi, '$1 $2 .');
+  // Unidades
+  t = t.replace(/([\d.,]+)\s*tn\b/gi, (m,n)=> gemMontoEnPalabras(n)+' toneladas');
+  t = t.replace(/\btn\b/gi, ' toneladas');
+  t = t.replace(/([\d.,]+)\s*kg\b/gi, (m,n)=> gemMontoEnPalabras(n)+' kilos');
+  t = t.replace(/([\d.,]+)\s*km\b/gi, (m,n)=> gemMontoEnPalabras(n)+' kilómetros');
+  // Números sueltos que quedaron (con punto de miles o grandes) → palabras
+  t = t.replace(/\b\d{1,3}(?:\.\d{3})+(?:,\d+)?\b/g, (m)=> gemMontoEnPalabras(m));
   // Limpiar espacios múltiples
   t = t.replace(/\s+/g, ' ').trim();
+  // Detalles de concordancia para que suene natural
+  t = t.replace(/millones (pesos|dólares|dolares)/gi, 'millones de $1');
+  t = t.replace(/\bun millón (pesos|dólares|dolares)/gi, 'un millón de $1');
+  // "ochocientos toneladas" → "ochocientas toneladas" (femenino)
+  t = t.replace(/(doscient|trescient|cuatrocient|quinient|seiscient|setecient|ochocient|novecient)os\s+(toneladas)/gi, '$1as $2');
+  t = t.replace(/\buno\s+(toneladas|tonelada)/gi, 'una tonelada');
   return t;
 }
 
@@ -3524,8 +3599,8 @@ function gemHablar(texto){
   const u = new SpeechSynthesisUtterance(limpio);
   u.lang = (gemVozPreferida && gemVozPreferida.lang) || 'es-MX';
   if(gemVozPreferida) u.voice = gemVozPreferida;
-  u.rate = 0.95;   // pausada, tranquila
-  u.pitch = 1.05;  // tono levemente más cálido
+  u.rate = 1.0;    // velocidad natural
+  u.pitch = 1.0;   // tono neutro/natural (subirlo suena más robótico)
   u.volume = 1;
   window.speechSynthesis.speak(u);
 }
