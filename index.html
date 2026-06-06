@@ -3055,6 +3055,20 @@ async function llamarGemini(texto){
   const fleteCortoActual = document.getElementById('g_flete_corto')?.value || '0';
   const fleteLargoActual = document.getElementById('g_flete_largo')?.value || '0';
   const comActual = document.getElementById('com')?.value || '0';
+  // Resultados calculados por la app (disponibles en el DOM)
+  const gv = id => document.getElementById(id)?.textContent?.trim() || '—';
+  const resKilos      = gv('res_kilos');
+  const resNetoTotal  = gv('res_neto_total');
+  const resGastos     = gv('res_gastos');
+  const resDedTotal   = gv('res_d_total');
+  const resRetTotal   = gv('res_r_total');
+  const resGastosNeg  = gv('res_gastos_neg');
+  const resRecibis    = gv('res_recibis');
+  const resCanjeTotal = gv('res_canje_total');
+  const resPagoTotal  = gv('res_pago_total');
+  const resGastosFlete = gv('res_g_flete_corto') !== '—' ? gv('res_g_flete_corto') : null;
+  const resGastosFlLargo = gv('res_g_flete_largo') !== '—' ? gv('res_g_flete_largo') : null;
+  const hayCalculo = resRecibis !== '—' && resRecibis !== '';
 
   const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina. Hablas de forma natural, amable y argentina.
 
@@ -3120,8 +3134,12 @@ Cuando uses km NO cargues el monto de tarifa del mismo flete.
 FLUJO DE CONVERSACION — MUY IMPORTANTE:
 1. Cuando el usuario te da muchos datos juntos (ej: "30 tn de girasol a 440 con flete directo 500km menos 10%, comision 2%, factor 115%"), CARGÁ TODOS LOS CAMPOS en un solo turno sin omitir ninguno.
 2. Luego fijate que falta del minimo obligatorio: grano + toneladas + precio. Si falta alguno, preguntá (uno por vez).
-3. Si ya tenes el minimo, avisá que calculaste y preguntá si quiere agregar algo mas (humedad, paritarias, etc.).
-4. Si el usuario dice "listo" o "es todo", cerrá amablemente.
+3. Cuando ya tengas el minimo y la app calculó, SIEMPRE decile el resultado al usuario en el mensaje. Leé los valores del ESTADO ACTUAL DE LA APP que te paso abajo y resumilos así:
+   "Calculé: bruto $ X → gastos/deducciones/retenciones − $ Y → **te quedan $ Z** (u$s W)"
+   Siempre mostrá al menos: bruto, total descontado, y lo que recibe.
+4. Si el usuario te pide el detalle ("¿cómo se calculó?", "¿qué se descontó?", "desglosame"), explicá cada ítem usando los valores del estado actual: gastos de recibo, deducciones (comisión, sellos, derecho), retenciones (IVA, IIBB, Ganancias), flete, etc.
+   NUNCA respondas "no tengo el detalle" o "mirá la app". Los datos están en el estado actual que te paso.
+5. Si el usuario dice "listo" o "es todo", cerrá amablemente con un resumen final.
 
 MUY IMPORTANTE - cuando NO entiendas o el usuario diga algo confuso:
 - NUNCA respondas solo "no entendi" o mandes el mensaje generico de bienvenida.
@@ -3137,7 +3155,20 @@ Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
 }
 Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj.
 
-Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.`;
+Estado actual de la app:
+DATOS INGRESADOS: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.
+${hayCalculo ? `RESULTADOS CALCULADOS (usá estos para responder al usuario cuando pregunte el resultado o el detalle):
+- Toneladas totales: ${resKilos} tn
+- Bruto liquidacion: ${resNetoTotal}
+- Total gastos de recibo (c/IVA): ${resGastos}
+${resGastosFlete ? '- Flete corto: '+resGastosFlete : ''}
+${resGastosFlLargo ? '- Flete largo/directo: '+resGastosFlLargo : ''}
+- Total deducciones (comision+sellos+derecho+honorarios): ${resDedTotal}
+- Total retenciones (IVA+IIBB+Ganancias): ${resRetTotal}
+- Total descontado (gastos+deuda): ${resGastosNeg}
+- LO QUE RECIBE EL PRODUCTOR: ${resRecibis}
+- Total canje: ${resCanjeTotal}
+- Total pago efectivo: ${resPagoTotal}` : 'RESULTADOS: aun no hay calculo (faltan datos minimos).'}`;
 
   // Agregar turno del usuario al historial
   gemHistorial.push({role:'user', parts:[{text: texto}]});
