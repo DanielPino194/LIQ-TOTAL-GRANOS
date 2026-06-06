@@ -3119,6 +3119,7 @@ Datos principales:
 - factor: factor de ajuste del precio en porcentaje (ej: "factor 115%" → 115, "factor 98%" → 98). Default 100. Usalo cuando el usuario diga "factor X%", "con un factor de X" o similar.
 - tc: tipo de cambio comprador ($/USD)
 - tc_vendedor: tipo de cambio vendedor ($/USD)
+  FORMATO IMPORTANTE: si el usuario escribe dos numeros separados por barra (ej "1400/1420"), el PRIMERO es tc (comprador) y el SEGUNDO es tc_vendedor. Entonces "1400/1420" debe cargar tc: 1400 y tc_vendedor: 1420. Si da un solo numero, es tc.
 
 Deuda e importe:
 - deuda_usd / deuda_ars: deuda de insumos (en dolares o pesos). "Cancelar una deuda" = registrar deuda.
@@ -3190,12 +3191,22 @@ ${bloqueResultados}`;
     body:JSON.stringify({
       systemInstruction:{parts:[{text:sistema}]},
       contents: gemHistorial,
-      generationConfig:{temperature:0.2,maxOutputTokens:800,responseMimeType:'application/json'}
+      generationConfig:{
+        temperature:0.2,
+        maxOutputTokens:2048,
+        responseMimeType:'application/json',
+        thinkingConfig:{thinkingBudget:0}
+      }
     })
   });
   if(!resp.ok) throw new Error('API '+resp.status);
   const data = await resp.json();
-  const out = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const cand = data.candidates?.[0];
+  let out = cand?.content?.parts?.[0]?.text || '';
+  // Si se corto por limite de tokens, avisamos en consola (igual intentamos parsear)
+  if(cand?.finishReason === 'MAX_TOKENS'){
+    console.warn('Respuesta cortada por MAX_TOKENS');
+  }
   // Guardar respuesta del modelo en historial
   gemHistorial.push({role:'model', parts:[{text: out}]});
   return out;
