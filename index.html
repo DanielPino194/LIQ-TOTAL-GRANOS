@@ -3104,6 +3104,15 @@ Fletes:
 - flete_largo_moneda: "usd" o "ars"
 - flete_largo_tipo: "largo" o "directo" (si el usuario dice "flete directo" usar "directo")
 
+Los fletes se pueden calcular de DOS formas:
+a) Por TARIFA: el usuario da un monto fijo por tonelada. Usá flete_corto / flete_largo con su moneda.
+b) Por KM: el usuario da los kilometros y la app calcula la tarifa. Si el usuario dice los km (ej: "flete corto 50 km", "flete directo 300 kilometros"), usá estos campos:
+   - flete_corto_km: cantidad de km del flete corto
+   - flete_corto_aj: ajuste % del flete corto (opcional, si lo menciona)
+   - flete_largo_km: cantidad de km del flete largo/directo
+   - flete_largo_aj: ajuste % del flete largo (opcional)
+   Cuando uses km, NO cargues el monto de tarifa de ese flete.
+
 IMPORTANTE sobre monedas: si un monto esta en pesos usa el campo _ars o la moneda "ars"; si esta en dolares usa _usd o "usd". "3 millones de pesos" = 3000000. "20 mil dolares" = 20000.
 
 FLUJO DE CONVERSACION:
@@ -3123,7 +3132,7 @@ Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
   "campos": { ...solo los datos nuevos o actualizados de este turno (puede ir vacio {}) },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj.
 
 Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}.`;
 
@@ -3185,10 +3194,26 @@ function procesarRespuesta(texto){
   if(c.puntos_libres!==undefined) setInputVal('puntos_libres',c.puntos_libres);
   if(c.hum_recibo!==undefined) setInputVal('hum_recibo',c.hum_recibo);
   // Fletes con moneda y tipo
-  if(c.flete_corto!==undefined){ setFleteCampo('g_flete_corto', c.flete_corto, c.flete_corto_moneda); }
+  if(c.flete_corto!==undefined){
+    if(typeof setFleteModo==='function') setFleteModo('corto','tarifa');
+    setFleteCampo('g_flete_corto', c.flete_corto, c.flete_corto_moneda);
+  }
   if(c.flete_largo!==undefined){
     if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+    if(typeof setFleteModo==='function') setFleteModo('salida','tarifa');
     setFleteCampo('g_flete_largo', c.flete_largo, c.flete_largo_moneda);
+  }
+  // Fletes por KM
+  if(c.flete_corto_km!==undefined){
+    if(typeof setFleteModo==='function') setFleteModo('corto','km');
+    setInputVal('g_flete_corto_km', c.flete_corto_km);
+    if(c.flete_corto_aj!==undefined) setInputVal('g_flete_corto_aj', c.flete_corto_aj);
+  }
+  if(c.flete_largo_km!==undefined){
+    if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+    if(typeof setFleteModo==='function') setFleteModo('salida','km');
+    setInputVal('g_flete_largo_km', c.flete_largo_km);
+    if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
   }
   if(typeof calcular==='function') calcular();
   agregarMensaje(obj.mensaje || 'Listo.','bot');
