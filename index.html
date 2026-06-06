@@ -2935,12 +2935,12 @@ if('serviceWorker' in navigator){
     <button onclick="toggleGemini()">&#x2715;</button>
   </div>
   <div class="gem-msgs" id="gem-msgs">
-    <div class="gem-msg bot">Hola! Describime la operacion y completo los campos automaticamente.<br><br>Ej: <em>"500 tn de soja a 380 dolares, debo 20.000 USD"</em></div>
+    <div class="gem-msg bot">Hola! Contame tu operacion y te voy preguntando lo que falte.<br><br>Ej: <em>"Tengo soja para liquidar"</em> o <em>"500 toneladas a 380"</em></div>
   </div>
   <div class="gem-actions" id="gem-chips">
-    <div class="gem-chip" onclick="gemSend(this.textContent)">500 tn soja $380</div>
-    <div class="gem-chip" onclick="gemSend(this.textContent)">1000 tn maiz $200</div>
-    <div class="gem-chip" onclick="gemSend(this.textContent)">Conviene canje o pago?</div>
+    <div class="gem-chip" onclick="gemSend(this.textContent)">Tengo soja para liquidar</div>
+    <div class="gem-chip" onclick="gemSend(this.textContent)">500 tn de maiz</div>
+    <div class="gem-chip" onclick="gemReiniciar()">&#x21BA; Empezar de nuevo</div>
   </div>
   <div class="gem-input-row">
     <input id="gem-input" type="text" placeholder="Ej: 800 tn trigo a 250 USD..." onkeydown="if(event.key==='Enter')gemEnviar()">
@@ -3004,6 +3004,13 @@ function gemMic(){
   gemRecognition.start();
 }
 
+function gemReiniciar(){
+  gemHistorial = [];
+  const msgs = document.getElementById('gem-msgs');
+  msgs.innerHTML = '<div class="gem-msg bot">Empecemos de nuevo. Contame tu operacion.</div>';
+  scrollMsgs();
+}
+
 function gemSend(texto){
   document.getElementById('gemini-panel').classList.add('open');
   agregarMensaje(texto, 'user');
@@ -3023,58 +3030,84 @@ function gemSend(texto){
   });
 }
 
+// Historial de la conversacion para mantener contexto
+let gemHistorial = [];
+
 async function llamarGemini(texto){
   const granoActual = document.getElementById('grano')?.value || '';
   const precioActual = document.getElementById('precio')?.value || '';
   const tcActual = document.getElementById('tc')?.value || '';
+  const kActual = document.getElementById('k_total')?.value || '';
 
-  const prompt = `Sos un asistente para una app de liquidacion de granos en Argentina.
-El usuario describira una operacion. Extraer los datos y devolver SOLO un JSON sin texto extra ni markdown:
+  const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina.
+Tu objetivo es juntar los datos de una operacion haciendo preguntas cortas, UNA por vez, de forma natural y amable.
+
+Datos que necesitas para calcular (minimo: grano, toneladas y precio):
+- grano (soja, maiz, trigo, cebada o girasol)
+- toneladas
+- precio en USD/tn
+- opcional: deuda de insumos (USD o pesos), importe a cobrar (USD o pesos), tipo de cambio
+
+COMPORTAMIENTO:
+1. Si el usuario te da varios datos juntos, tomalos todos.
+2. Preguntá SOLO por lo que falta, de a una pregunta por vez, en lenguaje simple.
+3. Cuando ya tengas grano + toneladas + precio, confirmá brevemente y avisá que ya calculaste.
+4. La deuda y el importe a cobrar son opcionales: preguntá una vez si los tiene, y si dice que no, segui adelante.
+
+Respondé SIEMPRE con un JSON valido sin markdown ni texto extra, con esta forma:
 {
-  "grano": "soja|maiz|trigo|cebada|girasol",
-  "precio": numero USD/tn,
-  "tc": numero tipo cambio comprador $/USD,
-  "tc_vendedor": numero tipo cambio vendedor $/USD,
-  "modo": "importe|kilos",
-  "k_total": toneladas (solo si modo=kilos),
-  "deuda_usd": deuda en dolares,
-  "deuda_ars": deuda en pesos,
-  "cobrar_usd": importe a cobrar USD,
-  "cobrar_ars": importe a cobrar pesos,
-  "mensaje": "texto breve confirmando lo que entendiste"
+  "campos": {
+     "grano": "soja|maiz|trigo|cebada|girasol",
+     "precio": numero,
+     "k_total": numero (toneladas),
+     "tc": numero,
+     "tc_vendedor": numero,
+     "deuda_usd": numero,
+     "deuda_ars": numero,
+     "cobrar_usd": numero,
+     "cobrar_ars": numero
+  },
+  "mensaje": "tu respuesta o proxima pregunta para el usuario"
 }
-Solo incluir campos mencionados. Contexto actual: grano=${granoActual}, precio=${precioActual} USD, TC=${tcActual}.
-Si pregunta conveniencia canje vs pago, responder con solo el campo "mensaje" con el analisis.
-Usuario: ${texto}`;
+En "campos" incluí SOLO los datos nuevos o actualizados de este turno (puede ir vacio {}).
+Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}.`;
+
+  // Agregar turno del usuario al historial
+  gemHistorial.push({role:'user', parts:[{text: texto}]});
 
   const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.1,maxOutputTokens:512}})
+    body:JSON.stringify({
+      systemInstruction:{parts:[{text:sistema}]},
+      contents: gemHistorial,
+      generationConfig:{temperature:0.2,maxOutputTokens:512,responseMimeType:'application/json'}
+    })
   });
   if(!resp.ok) throw new Error('API '+resp.status);
   const data = await resp.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const out = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // Guardar respuesta del modelo en historial
+  gemHistorial.push({role:'model', parts:[{text: out}]});
+  return out;
 }
 
 function procesarRespuesta(texto){
   const clean = texto.replace(/```json|```/g,'').trim();
   try{
     const obj = JSON.parse(clean);
-    let aplicados = [];
-    if(obj.grano){ const s=document.getElementById('grano'); if(s){s.value=obj.grano;s.dispatchEvent(new Event('change'));aplicados.push('grano');} }
-    if(obj.precio!==undefined){ setInputVal('precio',obj.precio); aplicados.push('precio'); }
-    if(obj.tc!==undefined){ setInputVal('tc',obj.tc); aplicados.push('TC comprador'); }
-    if(obj.tc_vendedor!==undefined){ setInputVal('tc_vendedor',obj.tc_vendedor); aplicados.push('TC vendedor'); }
-    if(obj.modo){ setModo(obj.modo); }
-    if(obj.k_total!==undefined){ setInputVal('k_total',obj.k_total); aplicados.push('toneladas'); if(!obj.modo)setModo('kilos'); }
-    if(obj.deuda_usd!==undefined){ setInputVal('deuda_usd',obj.deuda_usd); aplicados.push('deuda USD'); }
-    if(obj.deuda_ars!==undefined){ setInputVal('deuda_ars',obj.deuda_ars); aplicados.push('deuda $'); }
-    if(obj.cobrar_usd!==undefined){ setInputVal('cobrar_usd',obj.cobrar_usd); aplicados.push('cobrar USD'); }
-    if(obj.cobrar_ars!==undefined){ setInputVal('cobrar_ars',obj.cobrar_ars); aplicados.push('cobrar $'); }
+    const c = obj.campos || {};
+    if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
+    if(c.precio!==undefined) setInputVal('precio',c.precio);
+    if(c.k_total!==undefined){ setModo('kilos'); setInputVal('k_total',c.k_total); }
+    if(c.tc!==undefined) setInputVal('tc',c.tc);
+    if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
+    if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
+    if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
+    if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
+    if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
     if(typeof calcular==='function') calcular();
-    const msg = obj.mensaje || (aplicados.length ? 'Complete: '+aplicados.join(', ')+'. Revisa los resultados.' : 'Listo.');
-    agregarMensaje(msg,'bot');
+    agregarMensaje(obj.mensaje || 'Listo.','bot');
   } catch(e){
     agregarMensaje(texto,'bot');
   }
