@@ -3070,6 +3070,22 @@ async function llamarGemini(texto){
   const resGastosFlLargo = gv('res_g_flete_largo') !== '—' ? gv('res_g_flete_largo') : null;
   const hayCalculo = resRecibis !== '—' && resRecibis !== '';
 
+  // Bloque de resultados calculados para inyectar en el prompt
+  const bloqueResultados = hayCalculo
+    ? 'RESULTADOS CALCULADOS (usá estos para responder al usuario):'
+    + '\n- Toneladas: ' + resKilos + ' tn'
+    + '\n- Bruto liquidacion: ' + resNetoTotal
+    + '\n- Total gastos de recibo (c/IVA): ' + resGastos
+    + (resGastosFlete ? '\n- Flete corto: ' + resGastosFlete : '')
+    + (resGastosFlLargo ? '\n- Flete largo/directo: ' + resGastosFlLargo : '')
+    + '\n- Total deducciones: ' + resDedTotal
+    + '\n- Total retenciones: ' + resRetTotal
+    + '\n- Total descontado (gastos+deuda): ' + resGastosNeg
+    + '\n- LO QUE RECIBE EL PRODUCTOR: ' + resRecibis
+    + '\n- Total canje: ' + resCanjeTotal
+    + '\n- Total pago efectivo: ' + resPagoTotal
+    : 'RESULTADOS: aun no hay calculo (faltan datos minimos).';
+
   const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina. Hablas de forma natural, amable y argentina.
 
 Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas TODOS los datos que te da en un mismo mensaje, completas los campos correspondientes, y recien ahi preguntás lo que falta (UNA cosa por vez). NUNCA ignores datos que el usuario ya te dio.
@@ -3157,18 +3173,7 @@ Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, fact
 
 Estado actual de la app:
 DATOS INGRESADOS: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.
-${hayCalculo ? `RESULTADOS CALCULADOS (usá estos para responder al usuario cuando pregunte el resultado o el detalle):
-- Toneladas totales: ${resKilos} tn
-- Bruto liquidacion: ${resNetoTotal}
-- Total gastos de recibo (c/IVA): ${resGastos}
-${resGastosFlete ? '- Flete corto: '+resGastosFlete : ''}
-${resGastosFlLargo ? '- Flete largo/directo: '+resGastosFlLargo : ''}
-- Total deducciones (comision+sellos+derecho+honorarios): ${resDedTotal}
-- Total retenciones (IVA+IIBB+Ganancias): ${resRetTotal}
-- Total descontado (gastos+deuda): ${resGastosNeg}
-- LO QUE RECIBE EL PRODUCTOR: ${resRecibis}
-- Total canje: ${resCanjeTotal}
-- Total pago efectivo: ${resPagoTotal}` : 'RESULTADOS: aun no hay calculo (faltan datos minimos).'}`;
+${bloqueResultados}`;
 
   // Agregar turno del usuario al historial
   gemHistorial.push({role:'user', parts:[{text: texto}]});
