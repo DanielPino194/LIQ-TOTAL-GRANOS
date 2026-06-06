@@ -2941,13 +2941,9 @@ if('serviceWorker' in navigator){
     <button onclick="toggleGemini()">&#x2715;</button>
   </div>
   <div class="gem-msgs" id="gem-msgs">
-    <div class="gem-msg bot">Hola! Contame tu operacion y te voy preguntando lo que falte.<br><br>Ej: <em>"Tengo soja para liquidar"</em> o <em>"500 toneladas a 380"</em></div>
+    <div class="gem-msg bot">Hola! ¿Qué tipo de operación necesitás hacer? Contame y lo hacemos.</div>
   </div>
-  <div class="gem-actions" id="gem-chips">
-    <div class="gem-chip" onclick="gemSend(this.textContent)">Tengo soja para liquidar</div>
-    <div class="gem-chip" onclick="gemSend(this.textContent)">500 tn de maiz</div>
-    <div class="gem-chip" onclick="gemReiniciar()">&#x21BA; Empezar de nuevo</div>
-  </div>
+  <div class="gem-actions" id="gem-chips" style="display:none"></div>
   <div class="gem-input-row">
     <input id="gem-input" type="text" placeholder="Ej: 800 tn trigo a 250 USD..." onkeydown="if(event.key==='Enter')gemEnviar()">
     <button id="gem-mic" onclick="gemMic()" title="Hablar">
@@ -3013,8 +3009,30 @@ function gemMic(){
 function gemReiniciar(){
   gemHistorial = [];
   const msgs = document.getElementById('gem-msgs');
-  msgs.innerHTML = '<div class="gem-msg bot">Empecemos de nuevo. Contame tu operacion.</div>';
+  msgs.innerHTML = '<div class="gem-msg bot">Hola! ¿Qué tipo de operación necesitás hacer? Contame y lo hacemos.</div>';
   scrollMsgs();
+}
+
+// Borra los datos cargados en la app (vuelve a valores por defecto)
+// SIN borrar el chat ni el historial: mantiene el contexto de la conversación
+function gemBorrarTodo(){
+  const defaults = {
+    precio:'380', k_total:'0', tc:'1400', tc_vendedor:'1420',
+    factor:'100', com:'2', deuda_usd:'0', deuda_ars:'0',
+    cobrar_usd:'0', cobrar_ars:'0', g_paritarias:'0', g_secada:'0',
+    g_fumigada:'0', puntos_libres:'0', hum_recibo:'',
+    g_flete_corto:'0', g_flete_largo:'0', g_flete_corto_km:'0',
+    g_flete_largo_km:'0', g_flete_corto_aj:'0', g_flete_largo_aj:'0'
+  };
+  for(const id in defaults){
+    const el = document.getElementById(id);
+    if(el) el.value = defaults[id];
+  }
+  // Toggle de precio vuelve a USD
+  const pb = document.getElementById('precio_curr');
+  if(pb && pb.dataset.curr==='ars' && typeof toggleCurr==='function') toggleCurr('precio');
+  if(typeof calcular==='function') calcular();
+  // NO reinicia el chat: el historial y los mensajes se mantienen
 }
 
 function gemSend(texto, silencioso){
@@ -3162,6 +3180,18 @@ FLUJO DE CONVERSACION — MUY IMPORTANTE:
 6. El campo "mensaje" NUNCA puede ir vacio. Siempre escribí algo util y claro para el usuario.
 7. Si el usuario dice "listo" o "es todo", cerrá con un resumen final del resultado.
 
+GENERAR PDF:
+La app puede descargar el detalle de la liquidación en PDF. Si el usuario te pide el PDF ("generame el pdf", "descargame el comprobante", "dame el detalle en pdf", "el pdf del resumen", "pdf del canje", "pdf del pago"), devolvé en "campos" el campo:
+  "generar_pdf": "resumen"   (o "canje" o "pago")
+Usá "resumen" para el detalle completo (es el default si no aclaran), "canje" solo para la parte de canje, "pago" solo para la parte de pago.
+IMPORTANTE: para generar el PDF tiene que haber una operación cargada (grano, toneladas y precio). Si todavía no hay datos, NO mandes generar_pdf: pedí primero los datos. En el "mensaje" confirmá, ej: "Listo, te descargo el PDF del resumen.".
+
+BORRAR / EMPEZAR DE NUEVO:
+Si el usuario dice "empecemos de nuevo", "borrá todo", "limpiá todo", "arranquemos de cero", "nueva operación" o similar, devolvé en "campos" el campo:
+  "reiniciar": true
+y en el "mensaje" confirmá brevemente, ej: "Listo, borré todo. Contame la nueva operación.". Cuando reinicies NO cargues otros campos en el mismo turno.
+IMPORTANTE: despues de reiniciar, los datos de la operacion anterior (grano, toneladas, precio, fletes, etc.) quedaron BORRADOS. Para la nueva operacion NO reuses esos datos viejos: esperá a que el usuario te los diga de nuevo. Igual seguís recordando el hilo de la charla (podés referirte a lo que hablaron), pero arrancás la carga desde cero.
+
 BUSQUEDA EN LA WEB EN TIEMPO REAL:
 Podés buscar datos actuales en internet (por ejemplo el dólar/tipo de cambio Banco Nación, precios de pizarra de granos, etc). Si el usuario te pide un dato que no sabés o que cambia a diario (ej: "buscá el dolar banco nacion", "que precio tiene la soja hoy", "poné el tipo de cambio actual"), devolvé en "campos" un campo especial:
   "buscar_web": "la consulta a buscar, ej: tipo de cambio dolar divisa Banco Nacion Argentina hoy"
@@ -3179,7 +3209,7 @@ Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
   "campos": { ...todos los datos mencionados en este turno (puede ir vacio {}) },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf.
 
 Estado actual de la app:
 DATOS INGRESADOS: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.
@@ -3270,6 +3300,12 @@ function procesarRespuesta(texto){
     return;
   }
   const c = obj.campos || {};
+  // Si el usuario pidió borrar/empezar de nuevo (limpia campos, mantiene el chat)
+  if(c.reiniciar){
+    if(typeof gemBorrarTodo==='function') gemBorrarTodo();
+    agregarMensaje(obj.mensaje || 'Listo, borré todo. Contame la nueva operación.', 'bot');
+    return;
+  }
   // Si Gemini pidió buscar un dato en la web, lo hacemos y reinyectamos el resultado
   if(c.buscar_web){
     agregarMensaje(obj.mensaje || 'Buscando el dato actualizado...', 'bot');
@@ -3349,6 +3385,17 @@ function procesarRespuesta(texto){
     }
   }
   agregarMensaje(msg,'bot');
+  // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
+  if(c.generar_pdf){
+    let tipo = (''+c.generar_pdf).toLowerCase();
+    if(tipo!=='canje' && tipo!=='pago') tipo='resumen';
+    if(!window._lastCalc){
+      agregarMensaje('Para generar el PDF necesito la operación cargada: grano, toneladas y precio. ¿Me los pasás?', 'bot');
+    } else if(typeof descargarPDF==='function'){
+      try{ descargarPDF(tipo); }
+      catch(e){ agregarMensaje('Tuve un problema al generar el PDF. Probá con el botón PDF de la pantalla.', 'error'); }
+    }
+  }
 }
 
 function setInputVal(id,val){
