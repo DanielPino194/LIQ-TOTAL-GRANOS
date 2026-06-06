@@ -3047,6 +3047,20 @@ async function llamarGemini(texto){
 
 Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas lo que te dice, completas los campos, y le vas preguntando UNA cosa por vez lo que falta. NUNCA cierres la conversacion de golpe si todavia faltan datos importantes.
 
+LA APP TIENE DOS MODOS DE CALCULO (vos elegis cual segun lo que pida el usuario):
+
+MODO "kilos" (por tonelada) - calculo directo:
+El usuario TIENE una cantidad de toneladas y quiere el resultado. Usalo cuando diga "tengo 500 toneladas", "vendi 500 tn", "entregue 500 toneladas".
+- Necesitas: grano, k_total (toneladas), precio.
+
+MODO "importe" (por importe) - calculo INVERSO:
+El usuario quiere saber CUANTAS TONELADAS NECESITA para cubrir una deuda o un importe a cobrar. Usalo cuando diga "cuantas toneladas necesito para cancelar X", "cuanto tengo que vender para cobrar Y".
+- Necesitas: grano, precio, y la deuda (deuda_usd/deuda_ars) y/o el importe a cobrar (cobrar_usd/cobrar_ars).
+- NO pidas toneladas en este modo: la app las calcula sola.
+- Destino opcional (campo "dest"): "auto" (default), "canje" o "pago".
+
+Siempre seteá el campo "modo" ("kilos" o "importe") segun la intencion que detectes.
+
 CAMPOS QUE PODES COMPLETAR:
 Datos principales:
 - grano: soja, maiz, trigo, cebada o girasol
@@ -3093,7 +3107,7 @@ Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
   "campos": { ...solo los datos nuevos o actualizados de este turno (puede ir vacio {}) },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-Las claves de "campos" son exactamente: grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo.
 
 Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}.`;
 
@@ -3137,9 +3151,11 @@ function procesarRespuesta(texto){
     return;
   }
   const c = obj.campos || {};
+  if(c.modo && typeof setModo==='function') setModo(c.modo);
+  if(c.dest && typeof setDest==='function') setDest(c.dest);
   if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
   if(c.precio!==undefined) setInputVal('precio',c.precio);
-  if(c.k_total!==undefined){ setModo('kilos'); setInputVal('k_total',c.k_total); }
+  if(c.k_total!==undefined){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); }
   if(c.tc!==undefined) setInputVal('tc',c.tc);
   if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
   if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
