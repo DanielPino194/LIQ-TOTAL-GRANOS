@@ -1234,13 +1234,10 @@ function parseNum(str, forceDecimal){
     const dots=(s.match(/\./g)||[]).length;
     if(dots===1){
       const [ent,dec]=s.split('.');
-      // si forceDecimal, siempre tratar como decimal
-      if(forceDecimal){
-        cleaned=s;
-      }
       // si después del punto hay exactamente 3 dígitos y la parte entera tiene al menos un dígito,
-      // se interpreta como separador de miles (1.500 → 1500)
-      else if(dec.length===3 && ent.length>=1){
+      // se interpreta como separador de miles (1.500 → 1500), incluso con forceDecimal.
+      // Esto evita que "1.500" toneladas se lea como 1,5.
+      if(dec.length===3 && ent.length>=1){
         cleaned=s.replace(/\./g,'');
       } else {
         // decimal (1.5, 14.5, 0.25, etc)
