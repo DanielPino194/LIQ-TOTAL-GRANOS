@@ -3017,9 +3017,9 @@ function gemReiniciar(){
   scrollMsgs();
 }
 
-function gemSend(texto){
+function gemSend(texto, silencioso){
   document.getElementById('gemini-panel').classList.add('open');
-  agregarMensaje(texto, 'user');
+  if(!silencioso) agregarMensaje(texto, 'user');
   document.getElementById('gem-chips').style.display='none';
   const loading = document.createElement('div');
   loading.className='gem-loading';
@@ -3112,7 +3112,8 @@ CAMPOS QUE PODES COMPLETAR:
 Datos principales:
 - grano: soja, maiz, trigo, cebada o girasol
 - k_total: toneladas
-- precio: precio en USD/tn
+- precio: precio en USD/tn (por defecto en dólares)
+- precio_moneda: "usd" o "ars". El precio se puede cargar en DÓLARES o en PESOS. Si el usuario dice "a 350 dólares" o "350 USD" → precio: 350, precio_moneda: "usd". Si dice "a 250 mil pesos por tonelada", "$250000/tn" o "250000 pesos la tonelada" → precio: 250000, precio_moneda: "ars". Por defecto, si solo dice un número sin aclarar, asumí dólares.
 - factor: factor de ajuste del precio en porcentaje (ej: "factor 115%" → 115, "factor 98%" → 98). Default 100. Usalo cuando el usuario diga "factor X%", "con un factor de X" o similar.
 - tc: tipo de cambio comprador ($/USD)
 - tc_vendedor: tipo de cambio vendedor ($/USD)
@@ -3161,6 +3162,11 @@ FLUJO DE CONVERSACION — MUY IMPORTANTE:
 6. El campo "mensaje" NUNCA puede ir vacio. Siempre escribí algo util y claro para el usuario.
 7. Si el usuario dice "listo" o "es todo", cerrá con un resumen final del resultado.
 
+BUSQUEDA EN LA WEB EN TIEMPO REAL:
+Podés buscar datos actuales en internet (por ejemplo el dólar/tipo de cambio Banco Nación, precios de pizarra de granos, etc). Si el usuario te pide un dato que no sabés o que cambia a diario (ej: "buscá el dolar banco nacion", "que precio tiene la soja hoy", "poné el tipo de cambio actual"), devolvé en "campos" un campo especial:
+  "buscar_web": "la consulta a buscar, ej: tipo de cambio dolar divisa Banco Nacion Argentina hoy"
+Cuando uses "buscar_web", NO inventes el dato: en el "mensaje" decí algo como "Dejame buscar el dato actualizado...". El sistema va a buscar y te va a pasar el resultado en el proximo turno para que lo uses (ej: cargá el tc con el numero encontrado).
+
 MUY IMPORTANTE - cuando NO entiendas o el usuario diga algo confuso:
 - NUNCA respondas solo "no entendi" o mandes el mensaje generico de bienvenida.
 - Preguntale EXACTAMENTE que no entendiste. Ejemplo: "No te entendi bien eso de 'tarifa menos 10%', ¿lo podes decir de otra forma? Por ejemplo: 'flete directo 500 km con descuento del 10%'."
@@ -3173,7 +3179,7 @@ Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
   "campos": { ...todos los datos mencionados en este turno (puede ir vacio {}) },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web.
 
 Estado actual de la app:
 DATOS INGRESADOS: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.
@@ -3209,6 +3215,31 @@ ${bloqueResultados}`;
   return out;
 }
 
+// Busca un dato en tiempo real usando Gemini + Google Search (llamada SEPARADA, sin JSON)
+async function buscarDatoWeb(consulta){
+  const sys = 'Sos un asistente que busca datos en tiempo real en Argentina. Respondé de forma BREVE y directa, solo el dato pedido con su fuente y fecha. Si es un tipo de cambio, dá el numero en pesos. No inventes: si no encontrás el dato, decilo.';
+  try{
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        systemInstruction:{parts:[{text:sys}]},
+        contents:[{role:'user', parts:[{text:consulta}]}],
+        tools:[{google_search:{}}],
+        generationConfig:{ temperature:0 }
+      })
+    });
+    if(!resp.ok) throw new Error('API '+resp.status);
+    const data = await resp.json();
+    const cand = data.candidates?.[0];
+    const partes = cand?.content?.parts || [];
+    const texto = partes.map(p=>p.text||'').join(' ').trim();
+    return texto || 'No encontré el dato.';
+  } catch(e){
+    return 'No pude buscar el dato en la web ahora mismo.';
+  }
+}
+
 function procesarRespuesta(texto){
   let clean = texto.replace(/```json|```/g,'').trim();
   let obj = null;
@@ -3239,10 +3270,36 @@ function procesarRespuesta(texto){
     return;
   }
   const c = obj.campos || {};
+  // Si Gemini pidió buscar un dato en la web, lo hacemos y reinyectamos el resultado
+  if(c.buscar_web){
+    agregarMensaje(obj.mensaje || 'Buscando el dato actualizado...', 'bot');
+    const loading = document.createElement('div');
+    loading.className='gem-loading';
+    loading.innerHTML='<span></span><span></span><span></span>';
+    loading.id='gem-loading-web';
+    document.getElementById('gem-msgs').appendChild(loading);
+    scrollMsgs();
+    buscarDatoWeb(c.buscar_web).then(resultado=>{
+      document.getElementById('gem-loading-web')?.remove();
+      // Reinyectar el resultado como contexto y pedir a Gemini que lo use
+      const aviso = 'Resultado de la busqueda web para "'+c.buscar_web+'": '+resultado+'. Usá este dato para continuar (por ejemplo cargá el tipo de cambio si corresponde) y confirmáselo al usuario.';
+      gemSend(aviso, true);
+    });
+    return;
+  }
   if(c.modo && typeof setModo==='function') setModo(c.modo);
   if(c.dest && typeof setDest==='function') setDest(c.dest);
   if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
-  if(c.precio!==undefined) setInputVal('precio',c.precio);
+  if(c.precio!==undefined){
+    setInputVal('precio',c.precio);
+    // Ajustar el toggle de moneda del precio (usd/ars) si hace falta
+    if(c.precio_moneda){
+      const btn=document.getElementById('precio_curr');
+      if(btn && btn.dataset.curr!==c.precio_moneda && typeof toggleCurr==='function'){
+        toggleCurr('precio');
+      }
+    }
+  }
   if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); }
   if(c.tc!==undefined) setInputVal('tc',c.tc);
   if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
