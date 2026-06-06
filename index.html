@@ -3067,6 +3067,15 @@ Condiciones de recibo (opcionales, + IVA 21%):
 - puntos_libres: puntos libres de humedad
 - hum_recibo: humedad de recibo en %
 
+Fletes:
+- flete_corto: monto del flete corto (de campo a acopio)
+- flete_corto_moneda: "usd" o "ars" segun como lo diga
+- flete_largo: monto del flete largo o directo (de origen a destino final)
+- flete_largo_moneda: "usd" o "ars"
+- flete_largo_tipo: "largo" o "directo" (si el usuario dice "flete directo" usar "directo")
+
+IMPORTANTE sobre monedas: si un monto esta en pesos usa el campo _ars o la moneda "ars"; si esta en dolares usa _usd o "usd". "3 millones de pesos" = 3000000. "20 mil dolares" = 20000.
+
 FLUJO DE CONVERSACION:
 1. Tomá todos los datos que el usuario te diga, aunque vengan juntos.
 2. Lo MINIMO para calcular es: grano + toneladas + precio. Si falta alguno de esos, preguntá por el que falte (uno por vez).
@@ -3079,7 +3088,7 @@ Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
   "campos": { ...solo los datos nuevos o actualizados de este turno (puede ir vacio {}) },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-Las claves de "campos" son exactamente: grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo.
+Las claves de "campos" son exactamente: grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo.
 
 Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}.`;
 
@@ -3092,7 +3101,7 @@ Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'
     body:JSON.stringify({
       systemInstruction:{parts:[{text:sistema}]},
       contents: gemHistorial,
-      generationConfig:{temperature:0.2,maxOutputTokens:512,responseMimeType:'application/json'}
+      generationConfig:{temperature:0.2,maxOutputTokens:800,responseMimeType:'application/json'}
     })
   });
   if(!resp.ok) throw new Error('API '+resp.status);
@@ -3114,11 +3123,11 @@ function procesarRespuesta(texto){
     if(m){ try{ obj = JSON.parse(m[0]); }catch(e2){} }
   }
   if(!obj){
-    // Si no se pudo parsear, mostrar solo si no parece JSON
-    if(!clean.includes('"campos"') && !clean.startsWith('{')){
+    const limpio = clean.replace(/[{}\[\]"]/g,'').trim();
+    if(limpio.length > 3 && !clean.includes('campos')){
       agregarMensaje(clean,'bot');
     } else {
-      agregarMensaje('Perdona, no te entendi bien. Me lo repetis?','bot');
+      agregarMensaje('Disculpa, se me cruzaron los cables. Decime de nuevo el dato por favor.','bot');
     }
     return;
   }
@@ -3138,6 +3147,12 @@ function procesarRespuesta(texto){
   if(c.g_fumigada!==undefined) setInputVal('g_fumigada',c.g_fumigada);
   if(c.puntos_libres!==undefined) setInputVal('puntos_libres',c.puntos_libres);
   if(c.hum_recibo!==undefined) setInputVal('hum_recibo',c.hum_recibo);
+  // Fletes con moneda y tipo
+  if(c.flete_corto!==undefined){ setFleteCampo('g_flete_corto', c.flete_corto, c.flete_corto_moneda); }
+  if(c.flete_largo!==undefined){
+    if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+    setFleteCampo('g_flete_largo', c.flete_largo, c.flete_largo_moneda);
+  }
   if(typeof calcular==='function') calcular();
   agregarMensaje(obj.mensaje || 'Listo.','bot');
 }
@@ -3150,6 +3165,20 @@ function setInputVal(id,val){
   el.value=num.toLocaleString('es-AR',{maximumFractionDigits:3});
   el.dispatchEvent(new Event('input'));
   el.dispatchEvent(new Event('change'));
+}
+
+// Setea un flete y ajusta su moneda (usd/ars) si hace falta
+function setFleteCampo(id, valor, moneda){
+  setInputVal(id, valor);
+  if(moneda){
+    const btn = document.getElementById(id+'_curr');
+    if(btn){
+      const actual = btn.dataset.curr; // 'usd' o 'ars'
+      if(actual !== moneda && typeof toggleCurr==='function'){
+        toggleCurr(id); // cambia al otro
+      }
+    }
+  }
 }
 
 let gemVozActiva = false;
