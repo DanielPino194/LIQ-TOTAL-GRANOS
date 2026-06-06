@@ -2974,7 +2974,6 @@ function gemEnviar(){
 let gemRecognition = null;
 let gemMicActivo = false;
 let gemTextoPrevio = '';
-let gemSesionActual = '';
 let gemDetenerManual = false;
 let gemReintentos = 0;
 
@@ -2993,13 +2992,12 @@ function gemMic(){
   }
   gemRecognition = new SR();
   gemRecognition.lang = 'es-AR';
-  gemRecognition.continuous = true;      // escucha de corrido, no corta al primer silencio
+  gemRecognition.continuous = false;     // en Android, continuous=true repite palabras (bug de Chromium)
   gemRecognition.interimResults = true;
   gemRecognition.maxAlternatives = 1;
 
   gemMicActivo = false;
-  gemTextoPrevio = '';     // texto de sesiones previas (tras reinicios por pausa)
-  gemSesionActual = '';    // texto de la sesión de escucha actual
+  gemTextoPrevio = '';     // texto acumulado de los tramos finales
   gemDetenerManual = false; // true cuando el usuario toca para terminar
   gemReintentos = 0;
 
@@ -3010,22 +3008,24 @@ function gemMic(){
     if(inp){ inp.dataset.ph = inp.placeholder; inp.placeholder = 'Escuchando... tocá el micrófono para terminar'; }
   };
   gemRecognition.onresult = (e)=>{
-    // Reconstruir el texto de ESTA sesión completo desde el índice 0
-    // (NO acumular con +=, porque al reanudar el motor re-emite todo y duplicaría)
-    let sesion = '';
-    for(let i=0;i<e.results.length;i++){
-      sesion += e.results[i][0].transcript + ' ';
+    // Tomar solo los resultados de ESTE evento (no acumular del array completo).
+    // Con continuous=false, cada tramo llega limpio y sin duplicar.
+    let finalTramo = '';
+    let interim = '';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const tr = e.results[i][0].transcript;
+      if(e.results[i].isFinal){ finalTramo += tr + ' '; }
+      else { interim += tr; }
     }
-    sesion = sesion.replace(/\s+/g,' ').trim();
-    // gemTextoPrevio = lo dicho en sesiones anteriores (antes de un reinicio por pausa)
-    const completo = (gemTextoPrevio + ' ' + sesion).replace(/\s+/g,' ').trim();
+    if(finalTramo){
+      gemTextoPrevio = (gemTextoPrevio + ' ' + finalTramo).replace(/\s+/g,' ').trim();
+    }
     const inp = document.getElementById('gem-input');
-    if(inp) inp.value = completo;
-    gemSesionActual = sesion;
+    if(inp) inp.value = (gemTextoPrevio + ' ' + interim).replace(/\s+/g,' ').trim();
   };
   gemRecognition.onerror = (ev)=>{
     const err = ev && ev.error;
-    // "no-speech" en modo continuo no debe cortar: a veces salta tras una pausa larga
+    // "no-speech" no debe cortar: a veces salta tras una pausa larga, reanudamos
     if(err === 'no-speech'){ return; }
     micBtn.classList.remove('listening');
     if(err === 'not-allowed' || err === 'service-not-allowed'){
@@ -3041,12 +3041,8 @@ function gemMic(){
     gemRecognition = null;
   };
   gemRecognition.onend = ()=>{
-    // Al cortarse (por pausa), pasamos lo de esta sesión a "previo" y reanudamos
-    if(gemSesionActual){
-      gemTextoPrevio = (gemTextoPrevio + ' ' + gemSesionActual).replace(/\s+/g,' ').trim();
-      gemSesionActual = '';
-    }
-    if(!gemDetenerManual && gemMicActivo && gemReintentos < 50){
+    // Si el usuario NO tocó para terminar, fue un corte por pausa: reanudar para que siga hablando
+    if(!gemDetenerManual && gemMicActivo && gemReintentos < 80){
       gemReintentos++;
       try{ gemRecognition.start(); return; }catch(e){}
     }
@@ -3402,12 +3398,21 @@ ${bloqueResultados}`;
   // Agregar turno del usuario al historial
   gemHistorial.push({role:'user', parts:[{text: texto}]});
 
+  // Enviar solo los últimos turnos: el estado real de la app va en el systemInstruction,
+  // así que no hace falta arrastrar todo el historial (eso causaba que reenviara datos viejos).
+  const MAX_TURNOS = 8; // 4 intercambios usuario+modelo
+  let historialCorto = gemHistorial.slice(-MAX_TURNOS);
+  // La API exige que el primer turno sea 'user'; si quedó uno 'model' adelante, lo quitamos
+  while(historialCorto.length && historialCorto[0].role !== 'user'){
+    historialCorto = historialCorto.slice(1);
+  }
+
   const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       systemInstruction:{parts:[{text:sistema}]},
-      contents: gemHistorial,
+      contents: historialCorto,
       generationConfig:{
         temperature:0.2,
         maxOutputTokens:2048,
