@@ -3039,37 +3039,44 @@ async function llamarGemini(texto){
   const tcActual = document.getElementById('tc')?.value || '';
   const kActual = document.getElementById('k_total')?.value || '';
 
-  const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina.
-Tu objetivo es juntar los datos de una operacion haciendo preguntas cortas, UNA por vez, de forma natural y amable.
+  const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina. Hablas de forma natural, amable y argentina.
 
-Datos que necesitas para calcular (minimo: grano, toneladas y precio):
-- grano (soja, maiz, trigo, cebada o girasol)
-- toneladas
-- precio en USD/tn
-- opcional: deuda de insumos (USD o pesos), importe a cobrar (USD o pesos), tipo de cambio
+Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas lo que te dice, completas los campos, y le vas preguntando UNA cosa por vez lo que falta. NUNCA cierres la conversacion de golpe si todavia faltan datos importantes.
 
-COMPORTAMIENTO:
-1. Si el usuario te da varios datos juntos, tomalos todos.
-2. Preguntá SOLO por lo que falta, de a una pregunta por vez, en lenguaje simple.
-3. Cuando ya tengas grano + toneladas + precio, confirmá brevemente y avisá que ya calculaste.
-4. La deuda y el importe a cobrar son opcionales: preguntá una vez si los tiene, y si dice que no, segui adelante.
+CAMPOS QUE PODES COMPLETAR:
+Datos principales:
+- grano: soja, maiz, trigo, cebada o girasol
+- k_total: toneladas
+- precio: precio en USD/tn
+- tc: tipo de cambio comprador ($/USD)
+- tc_vendedor: tipo de cambio vendedor ($/USD)
 
-Respondé SIEMPRE con un JSON valido sin markdown ni texto extra, con esta forma:
+Deuda e importe:
+- deuda_usd / deuda_ars: deuda de insumos (en dolares o pesos). "Cancelar una deuda" = registrar deuda.
+- cobrar_usd / cobrar_ars: importe a cobrar (en dolares o pesos)
+
+Condiciones de recibo (opcionales, + IVA 21%):
+- com: comision en %
+- g_paritarias: paritarias (USD/tn)
+- g_secada: secada por punto (USD/pt)
+- g_fumigada: fumigada (USD/tn)
+- puntos_libres: puntos libres de humedad
+- hum_recibo: humedad de recibo en %
+
+FLUJO DE CONVERSACION:
+1. Tomá todos los datos que el usuario te diga, aunque vengan juntos.
+2. Lo MINIMO para calcular es: grano + toneladas + precio. Si falta alguno de esos, preguntá por el que falte (uno por vez).
+3. Cuando tengas el minimo, hacé el calculo y AVISÁ que ya calculaste, pero seguí ofreciendo completar las condiciones de recibo: preguntá si quiere cargar comision, humedad de recibo, paritarias, secada, fumigada, etc. Una pregunta por vez.
+4. Si el usuario dice que no tiene mas datos o "listo", cerrá amablemente.
+5. Si no entendés algo, pedile que te lo aclare con tus palabras.
+
+Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
 {
-  "campos": {
-     "grano": "soja|maiz|trigo|cebada|girasol",
-     "precio": numero,
-     "k_total": numero (toneladas),
-     "tc": numero,
-     "tc_vendedor": numero,
-     "deuda_usd": numero,
-     "deuda_ars": numero,
-     "cobrar_usd": numero,
-     "cobrar_ars": numero
-  },
-  "mensaje": "tu respuesta o proxima pregunta para el usuario"
+  "campos": { ...solo los datos nuevos o actualizados de este turno (puede ir vacio {}) },
+  "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-En "campos" incluí SOLO los datos nuevos o actualizados de este turno (puede ir vacio {}).
+Las claves de "campos" son exactamente: grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo.
+
 Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}.`;
 
   // Agregar turno del usuario al historial
@@ -3093,24 +3100,42 @@ Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'
 }
 
 function procesarRespuesta(texto){
-  const clean = texto.replace(/```json|```/g,'').trim();
+  let clean = texto.replace(/```json|```/g,'').trim();
+  let obj = null;
   try{
-    const obj = JSON.parse(clean);
-    const c = obj.campos || {};
-    if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
-    if(c.precio!==undefined) setInputVal('precio',c.precio);
-    if(c.k_total!==undefined){ setModo('kilos'); setInputVal('k_total',c.k_total); }
-    if(c.tc!==undefined) setInputVal('tc',c.tc);
-    if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
-    if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
-    if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
-    if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
-    if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
-    if(typeof calcular==='function') calcular();
-    agregarMensaje(obj.mensaje || 'Listo.','bot');
+    obj = JSON.parse(clean);
   } catch(e){
-    agregarMensaje(texto,'bot');
+    // Intentar extraer el primer bloque JSON valido del texto
+    const m = clean.match(/\{[\s\S]*\}/);
+    if(m){ try{ obj = JSON.parse(m[0]); }catch(e2){} }
   }
+  if(!obj){
+    // Si no se pudo parsear, mostrar solo si no parece JSON
+    if(!clean.includes('"campos"') && !clean.startsWith('{')){
+      agregarMensaje(clean,'bot');
+    } else {
+      agregarMensaje('Perdona, no te entendi bien. Me lo repetis?','bot');
+    }
+    return;
+  }
+  const c = obj.campos || {};
+  if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
+  if(c.precio!==undefined) setInputVal('precio',c.precio);
+  if(c.k_total!==undefined){ setModo('kilos'); setInputVal('k_total',c.k_total); }
+  if(c.tc!==undefined) setInputVal('tc',c.tc);
+  if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
+  if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
+  if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
+  if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
+  if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
+  if(c.com!==undefined) setInputVal('com',c.com);
+  if(c.g_paritarias!==undefined) setInputVal('g_paritarias',c.g_paritarias);
+  if(c.g_secada!==undefined) setInputVal('g_secada',c.g_secada);
+  if(c.g_fumigada!==undefined) setInputVal('g_fumigada',c.g_fumigada);
+  if(c.puntos_libres!==undefined) setInputVal('puntos_libres',c.puntos_libres);
+  if(c.hum_recibo!==undefined) setInputVal('hum_recibo',c.hum_recibo);
+  if(typeof calcular==='function') calcular();
+  agregarMensaje(obj.mensaje || 'Listo.','bot');
 }
 
 function setInputVal(id,val){
