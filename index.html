@@ -3051,10 +3051,14 @@ async function llamarGemini(texto){
   const precioActual = document.getElementById('precio')?.value || '';
   const tcActual = document.getElementById('tc')?.value || '';
   const kActual = document.getElementById('k_total')?.value || '';
+  const factorActual = document.getElementById('factor')?.value || '100';
+  const fleteCortoActual = document.getElementById('g_flete_corto')?.value || '0';
+  const fleteLargoActual = document.getElementById('g_flete_largo')?.value || '0';
+  const comActual = document.getElementById('com')?.value || '0';
 
   const sistema = `Sos un asistente conversacional para una app de liquidacion de granos en Argentina. Hablas de forma natural, amable y argentina.
 
-Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas lo que te dice, completas los campos, y le vas preguntando UNA cosa por vez lo que falta. NUNCA cierres la conversacion de golpe si todavia faltan datos importantes.
+Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas TODOS los datos que te da en un mismo mensaje, completas los campos correspondientes, y recien ahi preguntás lo que falta (UNA cosa por vez). NUNCA ignores datos que el usuario ya te dio.
 
 LA APP TIENE DOS MODOS DE CALCULO. Elegí cual segun lo que pida el usuario y seteá el campo "modo":
 
@@ -3082,6 +3086,7 @@ Datos principales:
 - grano: soja, maiz, trigo, cebada o girasol
 - k_total: toneladas
 - precio: precio en USD/tn
+- factor: factor de ajuste del precio en porcentaje (ej: "factor 115%" → 115, "factor 98%" → 98). Default 100. Usalo cuando el usuario diga "factor X%", "con un factor de X" o similar.
 - tc: tipo de cambio comprador ($/USD)
 - tc_vendedor: tipo de cambio vendedor ($/USD)
 
@@ -3089,8 +3094,8 @@ Deuda e importe:
 - deuda_usd / deuda_ars: deuda de insumos (en dolares o pesos). "Cancelar una deuda" = registrar deuda.
 - cobrar_usd / cobrar_ars: importe a cobrar (en dolares o pesos)
 
-Condiciones de recibo (opcionales, + IVA 21%):
-- com: comision en %
+Condiciones de recibo:
+- com: comision en % (ej: "comision 2%" → 2, "comision del 2%" → 2). MUY IMPORTANTE: si el usuario dice "comision X%" siempre cargar este campo.
 - g_paritarias: paritarias (USD/tn)
 - g_secada: secada por punto (USD/pt)
 - g_fumigada: fumigada (USD/tn)
@@ -3098,43 +3103,41 @@ Condiciones de recibo (opcionales, + IVA 21%):
 - hum_recibo: humedad de recibo en %
 
 Fletes:
-- flete_corto: monto del flete corto (de campo a acopio)
-- flete_corto_moneda: "usd" o "ars" segun como lo diga
-- flete_largo: monto del flete largo o directo (de origen a destino final)
+- flete_corto: monto del flete corto por tarifa (de campo a acopio)
+- flete_corto_moneda: "usd" o "ars"
+- flete_largo: monto del flete largo o directo por tarifa (de origen a destino final)
 - flete_largo_moneda: "usd" o "ars"
-- flete_largo_tipo: "largo" o "directo" (si el usuario dice "flete directo" usar "directo")
+- flete_largo_tipo: "largo" o "directo" (si el usuario dice "flete directo" → "directo")
 
-Los fletes se pueden calcular de DOS formas:
-a) Por TARIFA: el usuario da un monto fijo por tonelada. Usá flete_corto / flete_largo con su moneda.
-b) Por KM: el usuario da los kilometros y la app calcula la tarifa. Si el usuario dice los km (ej: "flete corto 50 km", "flete directo 300 kilometros"), usá estos campos:
-   - flete_corto_km: cantidad de km del flete corto
-   - flete_corto_aj: ajuste % del flete corto (opcional, si lo menciona)
-   - flete_largo_km: cantidad de km del flete largo/directo
-   - flete_largo_aj: ajuste % del flete largo (opcional)
-   Cuando uses km, NO cargues el monto de tarifa de ese flete.
+FLETES POR KM (cuando el usuario dice los kilometros):
+Si el usuario menciona km (ej: "flete corto 50 km", "flete directo 300 km", "flete directo de 500 km"), usá estos campos en lugar de la tarifa:
+- flete_corto_km: km del flete corto
+- flete_corto_aj: ajuste % del flete corto. IMPORTANTE: "tarifa menos 10%" = -10, "con 10% de descuento" = -10, "tarifa mas 5%" = 5. Puede ser negativo.
+- flete_largo_km: km del flete largo/directo
+- flete_largo_aj: ajuste % del flete largo. Igual que arriba, puede ser negativo.
+Cuando uses km NO cargues el monto de tarifa del mismo flete.
 
-IMPORTANTE sobre monedas: si un monto esta en pesos usa el campo _ars o la moneda "ars"; si esta en dolares usa _usd o "usd". "3 millones de pesos" = 3000000. "20 mil dolares" = 20000.
+FLUJO DE CONVERSACION — MUY IMPORTANTE:
+1. Cuando el usuario te da muchos datos juntos (ej: "30 tn de girasol a 440 con flete directo 500km menos 10%, comision 2%, factor 115%"), CARGÁ TODOS LOS CAMPOS en un solo turno sin omitir ninguno.
+2. Luego fijate que falta del minimo obligatorio: grano + toneladas + precio. Si falta alguno, preguntá (uno por vez).
+3. Si ya tenes el minimo, avisá que calculaste y preguntá si quiere agregar algo mas (humedad, paritarias, etc.).
+4. Si el usuario dice "listo" o "es todo", cerrá amablemente.
 
-FLUJO DE CONVERSACION:
-1. Tomá todos los datos que el usuario te diga, aunque vengan juntos.
-2. Lo MINIMO para calcular es: grano + toneladas + precio. Si falta alguno de esos, preguntá por el que falte (uno por vez).
-3. Cuando tengas el minimo, hacé el calculo y AVISÁ que ya calculaste, pero seguí ofreciendo completar las condiciones de recibo: preguntá si quiere cargar comision, humedad de recibo, paritarias, secada, fumigada, flete, etc. Una pregunta por vez.
-4. Si el usuario dice que no tiene mas datos o "listo", cerrá amablemente.
-
-MUY IMPORTANTE - cuando NO entiendas o el usuario te haga una PREGUNTA en vez de darte un dato:
-- NUNCA respondas solo "no entendi" o "se me cruzaron los cables". Eso esta prohibido.
-- Si el usuario te pregunta algo (ej: "cuantas toneladas necesito?"), explicale con amabilidad que necesitas que el te diga los datos de la operacion (grano, toneladas y precio) y vos completas y calculas. Decile que dato te falta para avanzar.
-- Si no entendiste una palabra, pedile que te la aclare de otra forma, dando un ejemplo de como decirtelo.
+MUY IMPORTANTE - cuando NO entiendas o el usuario diga algo confuso:
+- NUNCA respondas solo "no entendi" o mandes el mensaje generico de bienvenida.
+- Preguntale EXACTAMENTE que no entendiste. Ejemplo: "No te entendi bien eso de 'tarifa menos 10%', ¿lo podes decir de otra forma? Por ejemplo: 'flete directo 500 km con descuento del 10%'."
+- Si el usuario repite algo que ya dijiste antes y vos no lo cargaste, pedile confirmacion: "¿Me estas diciendo que el flete es X?"
+- NUNCA pierdas el hilo de la conversacion anterior. Siempre recordá los datos que ya cargaste.
 - Siempre terminá tu mensaje guiando al usuario sobre que puede decirte a continuación.
 
 Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
 {
-  "campos": { ...solo los datos nuevos o actualizados de este turno (puede ir vacio {}) },
+  "campos": { ...todos los datos mencionados en este turno (puede ir vacio {}) },
   "mensaje": "tu respuesta o proxima pregunta en lenguaje natural"
 }
-Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj.
 
-Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}.`;
+Estado actual de la app: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.`;
 
   // Agregar turno del usuario al historial
   gemHistorial.push({role:'user', parts:[{text: texto}]});
@@ -3162,17 +3165,17 @@ function procesarRespuesta(texto){
   try{
     obj = JSON.parse(clean);
   } catch(e){
-    // Intentar extraer el primer bloque JSON valido del texto
     const m = clean.match(/\{[\s\S]*\}/);
     if(m){ try{ obj = JSON.parse(m[0]); }catch(e2){} }
   }
   if(!obj){
+    // Mostrar lo que el modelo dijo y guardar en historial para no perder el contexto
     const limpio = clean.replace(/[{}\[\]"]/g,'').trim();
-    if(limpio.length > 3 && !clean.includes('campos')){
-      agregarMensaje(clean,'bot');
-    } else {
-      agregarMensaje('Para armar la liquidacion necesito que me digas el grano, las toneladas y el precio. Por ejemplo: "500 toneladas de soja a 380 dolares". Que dato me das?','bot');
-    }
+    const msgFallback = limpio.length > 8
+      ? limpio
+      : '\u00bfMe podés contar un poco más? No entendí bien lo que quisiste decir. Contame, por ejemplo, el grano, las toneladas y el precio que tenés.';
+    agregarMensaje(msgFallback, 'bot');
+    gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje: msgFallback})}]});
     return;
   }
   const c = obj.campos || {};
@@ -3187,6 +3190,7 @@ function procesarRespuesta(texto){
   if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
   if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
   if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
+  if(c.factor!==undefined) setInputVal('factor',c.factor);
   if(c.com!==undefined) setInputVal('com',c.com);
   if(c.g_paritarias!==undefined) setInputVal('g_paritarias',c.g_paritarias);
   if(c.g_secada!==undefined) setInputVal('g_secada',c.g_secada);
