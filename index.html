@@ -3105,11 +3105,14 @@ async function llamarGemini(texto){
 
 TU PERSONALIDAD Y TONO:
 - Sos tranquila, suave y paciente. No apurás al usuario.
+- Hablás en español argentino, coloquial pero respetuosa: tuteás con "vos" (vos tenés, querés, contame), cordial y cercana, sin ser vulgar.
 - Hablás pausado y claro, con frases cortas y cálidas.
 - Hacés UNA pregunta por vez y le das lugar a que termine de responder. Nunca encimás varias preguntas juntas.
 - No sos efusiva ni exagerada: evitá signos de exclamación de más y frases tipo "¡Excelente!", "¡Perfecto!". Mejor un "Listo", "Bien", "Genial", "De acuerdo" tranquilo.
 - Si el usuario está cargando datos de a poco, acompañás sin presionar.
 - Si te presentás, decí algo simple como "Hola, soy Liza. ¿Qué operación querés hacer? Contame con calma."
+- IMPORTANTE PARA LA VOZ: tus mensajes se leen en voz alta. NO uses asteriscos, ni markdown, ni símbolos para resaltar (nada de **negrita**). Escribí en texto plano y natural.
+- Al decir montos, aclará SIEMPRE la moneda en palabras: "1.200.000 pesos" o "440 dólares". No mezcles. Nunca uses el símbolo $ suelto sin aclarar si son pesos o dólares.
 
 Tu trabajo es ir armando una operacion CHARLANDO con el usuario: tomas TODOS los datos que te da en un mismo mensaje, completas los campos correspondientes, y recien ahi preguntás lo que falta (UNA cosa por vez). NUNCA ignores datos que el usuario ya te dio.
 
@@ -3433,21 +3436,37 @@ function setFleteCampo(id, valor, moneda){
 let gemVozActiva = false;
 let gemVozPreferida = null;
 
-// Elige una voz femenina en español, la más natural disponible
+// Elige una voz FEMENINA en español LATINO (evita acento de España)
 function gemElegirVoz(){
   if(!window.speechSynthesis) return null;
   const voces = window.speechSynthesis.getVoices();
   if(!voces.length) return null;
-  const esEsp = v => /es(-|_)?/i.test(v.lang);
-  const espanolas = voces.filter(esEsp);
-  // Preferencias: voces femeninas naturales conocidas, luego es-AR, luego cualquier español
-  const preferidas = ['mónica','monica','paulina','helena','elvira','google español','microsoft','femenin','mujer','female'];
-  for(const p of preferidas){
-    const m = espanolas.find(v => (v.name+'').toLowerCase().includes(p));
+  const nombre = v => (v.name+'').toLowerCase();
+  const esEspanol = v => /^es(-|_)?/i.test(v.lang);
+  const esLatino = v => /es(-|_)?(AR|MX|US|419|CO|CL|PE|UY|VE)/i.test(v.lang);
+  const esEspana = v => /es(-|_)?ES/i.test(v.lang);
+  // nombres típicos de voces masculinas a evitar
+  const esMasculina = v => /(jorge|diego|carlos|pablo|miguel|juan|male|hombre|masculin)/i.test(nombre(v));
+  // nombres típicos de voces femeninas latinas
+  const femLatinas = ['paulina','francisca','sabina','dalia','lupe','rosa','google español de estados unidos','female'];
+
+  const espanolas = voces.filter(esEspanol);
+  if(!espanolas.length) return null;
+
+  // 1) Voz latina, femenina por nombre conocido
+  for(const f of femLatinas){
+    const m = espanolas.find(v => esLatino(v) && nombre(v).includes(f) && !esMasculina(v));
     if(m) return m;
   }
-  const ar = espanolas.find(v => /es(-|_)?AR/i.test(v.lang));
-  return ar || espanolas[0] || null;
+  // 2) Cualquier voz latina que no sea claramente masculina
+  let m = espanolas.find(v => esLatino(v) && !esMasculina(v));
+  if(m) return m;
+  // 3) Voz en español (no España) no masculina
+  m = espanolas.find(v => !esEspana(v) && !esMasculina(v));
+  if(m) return m;
+  // 4) Última opción: cualquier española no masculina, o la primera
+  m = espanolas.find(v => !esMasculina(v));
+  return m || espanolas[0];
 }
 
 function gemToggleVoz(){
@@ -3455,25 +3474,57 @@ function gemToggleVoz(){
   const btn = document.getElementById('gem-voice-toggle');
   btn.innerHTML = gemVozActiva ? '&#x1F50A;' : '&#x1F507;';
   if(!gemVozActiva && window.speechSynthesis) window.speechSynthesis.cancel();
-  // Cargar la voz preferida (puede tardar en estar disponible)
   if(gemVozActiva && window.speechSynthesis && !gemVozPreferida){
     gemVozPreferida = gemElegirVoz();
   }
 }
 
-// Algunas plataformas cargan las voces de forma asíncrona
+// Las voces se cargan de forma asíncrona en muchos navegadores
 if(window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged = () => { gemVozPreferida = gemElegirVoz(); };
+}
+
+// Limpia el texto para que la voz no lea asteriscos ni confunda monedas
+function gemLimpiarParaVoz(texto){
+  let t = ' ' + texto + ' ';
+  // Quitar markdown (asteriscos, guiones bajos, almohadillas, backticks)
+  t = t.replace(/[*_`#~]/g, ' ');
+  // "/tn" o "por tn" → "por tonelada" (antes de tocar las monedas)
+  t = t.replace(/\/\s*tn\b/gi, ' por tonelada');
+  t = t.replace(/\/\s*kg\b/gi, ' por kilo');
+  // Monedas: convertir símbolos a palabras claras
+  // "u$s 1.234" / "US$ 1.234" / "USD 1.234" → "1234 dólares"
+  t = t.replace(/u\$s\s*([\d.,]+)/gi, '$1 dólares ');
+  t = t.replace(/us\$\s*([\d.,]+)/gi, '$1 dólares ');
+  t = t.replace(/usd\s*([\d.,]+)/gi, '$1 dólares ');
+  t = t.replace(/([\d.,]+)\s*(usd|u\$s|dolares|dólares)/gi, '$1 dólares ');
+  // "$ 1.234" o "$1.234" (peso argentino) → "1234 pesos"
+  t = t.replace(/\$\s*([\d.,]+)/g, '$1 pesos ');
+  t = t.replace(/([\d.,]+)\s*(ars|pesos)\b/gi, '$1 pesos ');
+  // Unidades
+  t = t.replace(/\btn\b/gi, ' toneladas');
+  t = t.replace(/([\d.,]+)\s*kg\b/gi, '$1 kilos');
+  t = t.replace(/([\d.,]+)\s*%/g, '$1 por ciento');
+  t = t.replace(/\b%/g, ' por ciento');
+  // Números con punto de miles: quitar el punto para que no lea "punto"
+  t = t.replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1');
+  t = t.replace(/(\d)\.(?=\d{3}(\D|$))/g, '$1'); // segunda pasada para 1.234.567
+  // Corregir punto de fin de oración que quedó pegado: "30. dólares" → "30 dólares ."
+  t = t.replace(/(\d)\.\s+(dólares|pesos|toneladas|kilos|por ciento)/gi, '$1 $2 .');
+  // Limpiar espacios múltiples
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
 }
 
 function gemHablar(texto){
   if(!gemVozActiva || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   if(!gemVozPreferida) gemVozPreferida = gemElegirVoz();
-  const u = new SpeechSynthesisUtterance(texto);
-  u.lang = 'es-AR';
+  const limpio = gemLimpiarParaVoz(texto);
+  const u = new SpeechSynthesisUtterance(limpio);
+  u.lang = (gemVozPreferida && gemVozPreferida.lang) || 'es-MX';
   if(gemVozPreferida) u.voice = gemVozPreferida;
-  u.rate = 0.95;   // un poco más pausada, tranquila
+  u.rate = 0.95;   // pausada, tranquila
   u.pitch = 1.05;  // tono levemente más cálido
   u.volume = 1;
   window.speechSynthesis.speak(u);
