@@ -3079,9 +3079,14 @@ IMPORTANTE sobre monedas: si un monto esta en pesos usa el campo _ars o la moned
 FLUJO DE CONVERSACION:
 1. Tomá todos los datos que el usuario te diga, aunque vengan juntos.
 2. Lo MINIMO para calcular es: grano + toneladas + precio. Si falta alguno de esos, preguntá por el que falte (uno por vez).
-3. Cuando tengas el minimo, hacé el calculo y AVISÁ que ya calculaste, pero seguí ofreciendo completar las condiciones de recibo: preguntá si quiere cargar comision, humedad de recibo, paritarias, secada, fumigada, etc. Una pregunta por vez.
+3. Cuando tengas el minimo, hacé el calculo y AVISÁ que ya calculaste, pero seguí ofreciendo completar las condiciones de recibo: preguntá si quiere cargar comision, humedad de recibo, paritarias, secada, fumigada, flete, etc. Una pregunta por vez.
 4. Si el usuario dice que no tiene mas datos o "listo", cerrá amablemente.
-5. Si no entendés algo, pedile que te lo aclare con tus palabras.
+
+MUY IMPORTANTE - cuando NO entiendas o el usuario te haga una PREGUNTA en vez de darte un dato:
+- NUNCA respondas solo "no entendi" o "se me cruzaron los cables". Eso esta prohibido.
+- Si el usuario te pregunta algo (ej: "cuantas toneladas necesito?"), explicale con amabilidad que necesitas que el te diga los datos de la operacion (grano, toneladas y precio) y vos completas y calculas. Decile que dato te falta para avanzar.
+- Si no entendiste una palabra, pedile que te la aclare de otra forma, dando un ejemplo de como decirtelo.
+- Siempre terminá tu mensaje guiando al usuario sobre que puede decirte a continuación.
 
 Respondé SIEMPRE con JSON valido (sin markdown), con esta forma:
 {
@@ -3127,7 +3132,7 @@ function procesarRespuesta(texto){
     if(limpio.length > 3 && !clean.includes('campos')){
       agregarMensaje(clean,'bot');
     } else {
-      agregarMensaje('Disculpa, se me cruzaron los cables. Decime de nuevo el dato por favor.','bot');
+      agregarMensaje('Para armar la liquidacion necesito que me digas el grano, las toneladas y el precio. Por ejemplo: "500 toneladas de soja a 380 dolares". Que dato me das?','bot');
     }
     return;
   }
