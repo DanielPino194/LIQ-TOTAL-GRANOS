@@ -3195,6 +3195,8 @@ function gemBorrarTodo(){
   if(typeof setModo==='function') setModo('importe');
   // Destino a auto
   if(typeof setDest==='function') setDest('auto');
+  // Olvidar qué campos había marcado como cargados (arrancamos de cero)
+  if(typeof resetCargados==='function') resetCargados();
   if(typeof calcular==='function') calcular();
   // Avisar a Gemini que los datos se borraron, para que NO arrastre los viejos.
   // Mantenemos el hilo del chat, pero marcamos un corte de operación en el historial.
@@ -3230,16 +3232,22 @@ function gemSend(texto, silencioso){
 
 // Historial de la conversacion para mantener contexto
 let gemHistorial = [];
+// Rastrea qué campos cargó realmente el usuario por chat (vs defaults de la app)
+let camposCargados = {};
+function marcarCargado(...ids){ ids.forEach(id=>{ camposCargados[id]=true; }); }
+function resetCargados(){ camposCargados = {}; }
 
 async function llamarGemini(texto){
-  const granoActual = document.getElementById('grano')?.value || '';
-  const precioActual = document.getElementById('precio')?.value || '';
-  const tcActual = document.getElementById('tc')?.value || '';
-  const kActual = document.getElementById('k_total')?.value || '';
-  const factorActual = document.getElementById('factor')?.value || '100';
+  // Helper: muestra el valor solo si el USUARIO lo cargó; si no, "(falta, preguntar)"
+  const dv = (id) => camposCargados[id] ? (document.getElementById(id)?.value || '(falta)') : '(falta, preguntar)';
+  const granoActual = camposCargados['grano'] ? (document.getElementById('grano')?.value || '(falta)') : '(falta, preguntar)';
+  const precioActual = dv('precio');
+  const tcActual = dv('tc');
+  const kActual = dv('k_total');
+  const factorActual = dv('factor');
+  const comActual = dv('com');
   const fleteCortoActual = document.getElementById('g_flete_corto')?.value || '0';
   const fleteLargoActual = document.getElementById('g_flete_largo')?.value || '0';
-  const comActual = document.getElementById('com')?.value || '0';
   // Resultados calculados por la app (disponibles en el DOM)
   const gv = id => document.getElementById(id)?.textContent?.trim() || '—';
   const resKilos      = gv('res_kilos');
@@ -3508,8 +3516,8 @@ MUY IMPORTANTE cuando el usuario CAMBIA un valor para recalcular (precio, tipo d
 - Limitate a confirmar el cambio, por ejemplo: "Listo, actualicé el precio a 450 dólares." y nada más. El número final lo pone el sistema.
 Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2.
 
-Estado actual de la app:
-DATOS INGRESADOS: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.
+Estado actual de la app (lo que marca "(falta, preguntar)" todavía NO lo dio el usuario; tenés que preguntarlo, no lo inventes ni calcules con un valor por defecto):
+DATOS INGRESADOS: grano=${granoActual}, toneladas=${kActual}, precio=${precioActual}, factor=${factorActual}, comision=${comActual}, TC=${tcActual}, flete corto=${fleteCortoActual}, flete largo/directo=${fleteLargoActual}.
 ${bloqueResultados}`;
 
   // Agregar turno del usuario al historial
@@ -3698,9 +3706,10 @@ function procesarRespuesta(texto){
 
   if(c.modo && typeof setModo==='function') setModo(c.modo);
   if(c.dest && typeof setDest==='function') setDest(c.dest);
-  if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
+  if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} marcarCargado('grano'); }
   if(c.precio!==undefined){
     setInputVal('precio',c.precio);
+    marcarCargado('precio');
     // Ajustar el toggle de moneda del precio (usd/ars) si hace falta
     if(c.precio_moneda){
       const btn=document.getElementById('precio_curr');
@@ -3709,15 +3718,15 @@ function procesarRespuesta(texto){
       }
     }
   }
-  if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); }
-  if(c.tc!==undefined) setInputVal('tc',c.tc);
-  if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
+  if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); marcarCargado('k_total'); }
+  if(c.tc!==undefined){ setInputVal('tc',c.tc); marcarCargado('tc'); }
+  if(c.tc_vendedor!==undefined){ setInputVal('tc_vendedor',c.tc_vendedor); marcarCargado('tc','tc_vendedor'); }
   if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
   if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
   if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
   if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
-  if(c.factor!==undefined) setInputVal('factor',c.factor);
-  if(c.com!==undefined) setInputVal('com',c.com);
+  if(c.factor!==undefined){ setInputVal('factor',c.factor); marcarCargado('factor'); }
+  if(c.com!==undefined){ setInputVal('com',c.com); marcarCargado('com'); }
   if(c.g_paritarias!==undefined) setInputVal('g_paritarias',c.g_paritarias);
   if(c.g_secada!==undefined) setInputVal('g_secada',c.g_secada);
   if(c.g_fumigada!==undefined) setInputVal('g_fumigada',c.g_fumigada);
@@ -3807,7 +3816,7 @@ function procesarRespuesta(texto){
           msg += '\n\nLa soja aporta ' + fmt(aporteARS) + '. Queda un saldo pendiente de '
                + fmt(saldo.deudaARS) + ' de deuda';
           if(saldo.cobroARS>0) msg += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
-          msg += '. ¿Con el segundo grano cubrimos solo la deuda, o también el saldo a cobrar?';
+          msg += '.\n\nSi querés te paso el PDF de esta primera parte (la soja). Y decime: con el segundo grano, ¿cubrimos solo la deuda o también el saldo a cobrar?';
           opCompleja.saldoMostrado = true; // no volver a anexarlo
         }
       }
