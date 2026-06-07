@@ -3431,6 +3431,11 @@ FLUJO DE CONVERSACION — MUY IMPORTANTE:
    c) Condiciones de recibo: "¿Querés sumar alguna condición de recibo, como humedad, paritarias, secada, fumigada o flete? ¿O lo dejamos así?"
    No las amontones: preguntá una, esperá la respuesta, y seguí con la siguiente. Si el usuario ya dio alguna, no la repitas.
 
+REGLA DE ORO — NO INVENTES RESULTADOS:
+- Mirá el estado: si el grano o el precio figuran como "(falta, preguntar)", NO digas ningún resultado, ni montos, ni toneladas, ni "lo que recibís". Esos números serían falsos (calculados sobre valores por defecto).
+- Mientras falten datos, tu mensaje SOLO confirma lo que cargaste y pregunta lo que falta. Por ejemplo: "Listo, registré la deuda y lo que querés cobrar. ¿Qué grano vas a vender?" — sin ningún número de resultado.
+- El resultado (montos, toneladas, lo que recibe) lo agrega el SISTEMA cuando corresponde, no vos. Vos nunca escribís cifras de resultado.
+
 3. Cuando tengas el mínimo, en el ESTADO ACTUAL vas a ver los RESULTADOS CALCULADOS y el REPARTO DE TONELADAS. Al dar el resultado, EXPLICÁ CLARO el reparto, en texto plano sin asteriscos, así:
    "Necesitás en total {toneladas totales} toneladas. De esas, {tn canje} toneladas van a canje para cancelar la deuda (los {deuda} en dólares y pesos) más los gastos, y {tn pago} toneladas van a pago para cubrir el saldo que querés cobrar de {importe a cobrar}."
    Si no hay deuda, no menciones canje por deuda; si no hay importe a cobrar, no menciones el pago. Adaptá la explicación a lo que realmente cargó el usuario.
@@ -3765,6 +3770,10 @@ function procesarRespuesta(texto){
     'flete_corto_km','flete_largo_km','flete_corto_aj','flete_largo_aj','grano','modo','dest'];
   const huboCambioCalculo = camposQueRecalculan.some(k => c[k] !== undefined);
 
+  // ¿El usuario ya cargó los datos mínimos para que el resultado tenga sentido?
+  // Mínimo: grano, precio Y tipo de cambio. Sin eso, no mostramos resultado.
+  const datosMinimos = camposCargados['grano'] && camposCargados['precio'] && camposCargados['tc'];
+
   // Si Gemini no mando mensaje, armar uno con el resultado recien calculado
   let msg = (obj.mensaje || '').trim();
   const gv = id => document.getElementById(id)?.textContent?.trim() || '';
@@ -3776,22 +3785,33 @@ function procesarRespuesta(texto){
   if(!msg){
     if(enOpComplejaPaso1){
       msg = 'Listo, cargué el primer grano.';
-    } else if(recibisReal && recibisReal !== '—'){
-      msg = 'Listo. Cobrás aproximadamente ' + recibisReal + ' en total. Si querés te detallo el cálculo.';
+    } else if(datosMinimos && recibisReal && recibisReal !== '—'){
+      // En modo importe, lo relevante son las toneladas necesarias, no "lo que recibís"
+      const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
+      if(esImporte){
+        msg = 'Necesitás ' + tnReal + ' tn para cubrir lo que pediste. ¿Querés que ajuste algo o te paso el detalle?';
+      } else {
+        msg = 'Listo. Cobrás aproximadamente ' + recibisReal + ' en total. Si querés te detallo el cálculo.';
+      }
     } else {
       msg = 'Cargué los datos. ¿Querés agregar algo más o te muestro el resultado?';
     }
-  } else if(!enOpComplejaPaso1 && huboCambioCalculo && recibisReal && recibisReal !== '—'){
-    // Anexar el resultado real recalculado (solo fuera de op compleja paso 1)
-    msg = msg + '\n\nResultado actualizado: por ' + tnReal + ' tn, lo que recibís es ' + recibisReal + '.';
+  } else if(!enOpComplejaPaso1 && datosMinimos && huboCambioCalculo && recibisReal && recibisReal !== '—'){
+    // Anexar el resultado real recalculado solo si hay datos mínimos cargados
+    const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
+    if(esImporte){
+      msg = msg + '\n\nNecesitás ' + tnReal + ' tn para cubrir lo que pediste.';
+    } else {
+      msg = msg + '\n\nResultado actualizado: por ' + tnReal + ' tn, lo que recibís es ' + recibisReal + '.';
+    }
   }
 
   // PASO 1 de operación compleja: el CÓDIGO calcula el saldo.
   // Solo se muestra UNA vez, cuando ya hay tipo de cambio cargado (sino el saldo en ARS sale mal).
   if(enOpComplejaPaso1 && !opCompleja.saldoMostrado){
-    const tcCargado = (typeof pv==='function') ? (pv('tc')||0) : 0;
-    if(tcCargado>0){
-      const tc = window._lastCalc.tc || tcCargado;
+    const tcUsuario = camposCargados['tc']; // solo si el usuario lo cargó (no el default)
+    if(tcUsuario){
+      const tc = window._lastCalc.tc || (typeof pv==='function' ? pv('tc') : 0);
       const lc = window._lastCalc;
       let aporteARS = 0;
       if(typeof liq==='function' && typeof pv==='function'){
