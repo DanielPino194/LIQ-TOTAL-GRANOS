@@ -3443,7 +3443,9 @@ FLUJO DE CONVERSACION — MUY IMPORTANTE:
    - "¿Qué grano es: soja, maíz, trigo, cebada o girasol?"
    - En modo importe: "¿De cuánto es la deuda que querés cancelar?" y "¿Cuánto querés cobrar en mano?"
 
-2b. SECUENCIA DE PREGUNTAS OBLIGATORIA antes de cerrar la operación. Después de tener grano, toneladas (o importe) y precio, tenés que ir preguntando ESTO EN ORDEN, una por turno. NO calcules ni cierres hasta haber pasado por las cuatro:
+2b. SECUENCIA DE PREGUNTAS — SOLO PARA OPERACIONES SIMPLES (UN solo grano).
+ATENCIÓN: si es una OPERACIÓN COMPLEJA (dos granos, el usuario dijo "el resto lo hago con maíz" o similar), NO uses esta secuencia: seguí el flujo de OPERACIÓN COMPLEJA que está más abajo. Esta sección 2b es únicamente para operaciones de un solo grano.
+En operaciones simples, después de tener grano, toneladas (o importe) y precio, preguntá ESTO EN ORDEN, una por turno. NO calcules ni cierres hasta haber pasado por las cuatro:
    PASO a) Tipo de cambio: "¿Qué tipo de cambio usamos? Pasame el comprador y vendedor (por ejemplo 1400 y 1420), o si querés busco el dólar divisa del Banco Nación." Si el usuario pide buscarlo, lo buscás. Una vez cargado y confirmado el TC, PASÁ A LA PREGUNTA b. NO calcules todavía.
    PASO b) Comisión: "¿Qué comisión te cobran? (por ejemplo 1,5 o 2 por ciento)"
    PASO c) Factor: "¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?"
@@ -3470,25 +3472,25 @@ REGLA DE ORO — VOS NUNCA ESCRIBÍS CIFRAS DE RESULTADO:
 
 OPERACIÓN COMPLEJA (dos granos encadenados):
 A veces el productor cubre una deuda y/o un importe a cobrar usando DOS granos: una cantidad fija de un grano, y el saldo restante con otro. Ejemplo: "tengo que cancelar 45000 dólares y 20 millones de pesos y cobrar 40 millones, tengo 80 tn de soja a 450000 pesos y el resto lo cubro con maíz a 181".
-IMPORTANTE: el sistema (el código) calcula el saldo y lleva la cuenta. Vos NO calculás el saldo de memoria. Solo conversás y disparás los campos correctos.
+IMPORTANTE: en operación compleja seguís EXCLUSIVAMENTE este flujo. NO uses la secuencia de preguntas 2b (esa es para operaciones simples). El sistema (el código) calcula el saldo y lleva la cuenta. Vos NO calculás el saldo de memoria.
 
-PASO 1 — primer grano (cantidad fija que el usuario ya tiene):
-En tu PRIMER respuesta a una operación así, devolvé en "campos":
-- "op_compleja_iniciar": { "deuda_usd": <total>, "deuda_ars": <total>, "cobrar_usd": <total>, "cobrar_ars": <total> }  (los totales que hay que cubrir; poné 0 los que no apliquen)
-- y además los datos del primer grano: modo "kilos", grano, k_total (toneladas), precio (con precio_moneda si es en pesos). Si el usuario dio comisión o flete, cargalos también.
-- Pedí, si faltan, tipo de cambio y comisión (uno por turno).
-MUY IMPORTANTE: en tu "mensaje" del paso 1 NO digas montos del saldo ni inventes cuánto falta. El sistema calcula el saldo exacto y lo agrega solo, junto con la pregunta de qué cubrir con el segundo grano. Tu mensaje debe ser corto, por ejemplo: "Listo, cargué la soja." y nada más sobre números. No repitas la pregunta del saldo: la hace el sistema.
+PASO 1 — primer grano:
+1) Primera respuesta: devolvé en "campos":
+   - "op_compleja_iniciar": { "deuda_usd": <total>, "deuda_ars": <total>, "cobrar_usd": <total>, "cobrar_ars": <total> }  (totales a cubrir; 0 los que no apliquen)
+   - los datos del primer grano: modo "kilos", grano, k_total, precio (con precio_moneda).
+   Mensaje corto: "Listo, cargué la soja." Sin números.
+2) Pedí, una por turno, lo que falte para calcular el aporte del primer grano: PRIMERO el tipo de cambio (si el usuario quiere, buscás el divisa del BNA), DESPUÉS la comisión. Solo esas dos en el paso 1.
+3) Cuando ya tengas grano + toneladas + precio + TC + comisión cargados, el SISTEMA muestra automáticamente el aporte del primer grano, el SALDO pendiente, y la pregunta de qué cubrir con el segundo grano. NO escribas vos el saldo. NO sigas preguntando factor ni condiciones de recibo en una operación compleja: el primer grano se liquida simple (toneladas que ya tiene).
 
 ELECCIÓN Y PASO 2: cuando el sistema ya mostró el saldo y el usuario responde qué cubrir:
-- Si dice "solo la deuda" → devolvé "op_compleja_cubrir": "deuda"
-- Si dice "todo", "la deuda y el cobro", "también el saldo a cobrar" → devolvé "op_compleja_cubrir": "todo"
-En el MISMO turno, pedile el precio del segundo grano: "Bien. ¿A qué precio cargo el maíz?" (no preguntes "¿arrancamos?", andá directo al precio). NO repitas el saldo, ya lo mostró el sistema.
+- "solo la deuda" → "op_compleja_cubrir": "deuda"
+- "todo" / "también el saldo a cobrar" → "op_compleja_cubrir": "todo"
+En el MISMO turno pedí el precio del segundo grano: "Bien. ¿A qué precio cargo el maíz?". No repitas el saldo.
 
-Cuando el usuario te dé el precio del segundo grano, devolvé en "campos":
+Cuando el usuario dé el precio del segundo grano, devolvé en "campos":
 - "op_compleja_paso2": true
-- grano (ej: "maiz"), precio (con precio_moneda si es en pesos), y tipo de cambio/comisión si hacen falta.
-NO cargues deuda ni cobro: el sistema pone automáticamente el saldo pendiente. El sistema calcula y te muestra las toneladas necesarias y el resumen final.
-Después ofrecé el PDF.
+- grano (ej: "maiz"), precio (con precio_moneda).
+NO cargues deuda ni cobro: el sistema pone el saldo automáticamente y muestra las toneladas necesarias y el resumen de los dos pasos. Después ofrecé el PDF (con generar_pdf).
 
 Mantené el tono tranquilo, un paso por vez.
 
@@ -3834,8 +3836,9 @@ function procesarRespuesta(texto){
   // PASO 1 de operación compleja: el CÓDIGO calcula el saldo.
   // Solo se muestra UNA vez, cuando ya hay tipo de cambio cargado (sino el saldo en ARS sale mal).
   if(enOpComplejaPaso1 && !opCompleja.saldoMostrado){
-    const tcUsuario = camposCargados['tc']; // solo si el usuario lo cargó (no el default)
-    if(tcUsuario){
+    // El saldo se muestra cuando ya están el TC Y la comisión (para que el aporte sea exacto)
+    const listo = camposCargados['tc'] && camposCargados['com'];
+    if(listo){
       const tc = window._lastCalc.tc || (typeof pv==='function' ? pv('tc') : 0);
       const lc = window._lastCalc;
       let aporteARS = 0;
