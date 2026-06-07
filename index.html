@@ -2991,7 +2991,9 @@ function opComplejaIniciar(totales){
     // qué cubrir con el segundo grano: 'deuda' | 'todo'
     cubrir2: null,
     // saldo pendiente (lo calcula el código)
-    saldo: null
+    saldo: null,
+    saldoMostrado: false,
+    resumen1: null
   };
   return opCompleja;
 }
@@ -3446,16 +3448,16 @@ En tu PRIMER respuesta a una operación así, devolvé en "campos":
 - Pedí, si faltan, tipo de cambio y comisión (uno por turno).
 MUY IMPORTANTE: en tu "mensaje" del paso 1 NO digas montos del saldo ni inventes cuánto falta. El sistema calcula el saldo exacto y lo agrega solo, junto con la pregunta de qué cubrir con el segundo grano. Tu mensaje debe ser corto, por ejemplo: "Listo, cargué la soja." y nada más sobre números. No repitas la pregunta del saldo: la hace el sistema.
 
-ELECCIÓN: cuando el usuario responda qué cubrir, devolvé en "campos":
-- "op_compleja_cubrir": "deuda"   (o "todo" si quiere cubrir también el saldo a cobrar)
-En el mensaje, ofrecé pasar al segundo grano: "¿Arrancamos con el maíz para cubrir ese saldo?"
+ELECCIÓN Y PASO 2: cuando el sistema ya mostró el saldo y el usuario responde qué cubrir:
+- Si dice "solo la deuda" → devolvé "op_compleja_cubrir": "deuda"
+- Si dice "todo", "la deuda y el cobro", "también el saldo a cobrar" → devolvé "op_compleja_cubrir": "todo"
+En el MISMO turno, pedile el precio del segundo grano: "Bien. ¿A qué precio cargo el maíz?" (no preguntes "¿arrancamos?", andá directo al precio). NO repitas el saldo, ya lo mostró el sistema.
 
-PASO 2 — segundo grano (cubre el saldo):
-Cuando el usuario confirme, devolvé en "campos":
+Cuando el usuario te dé el precio del segundo grano, devolvé en "campos":
 - "op_compleja_paso2": true
-- grano (ej: "maiz"), precio (con precio_moneda), y tipo de cambio/comisión si hacen falta.
-NO cargues deuda ni cobro: el sistema pone automáticamente el saldo pendiente que calculó. El sistema te dirá cuántas toneladas del segundo grano hacen falta.
-Después ofrecé el PDF y cerrá con un resumen de los dos pasos.
+- grano (ej: "maiz"), precio (con precio_moneda si es en pesos), y tipo de cambio/comisión si hacen falta.
+NO cargues deuda ni cobro: el sistema pone automáticamente el saldo pendiente. El sistema calcula y te muestra las toneladas necesarias y el resumen final.
+Después ofrecé el PDF.
 
 Mantené el tono tranquilo, un paso por vez.
 
@@ -3647,6 +3649,12 @@ function procesarRespuesta(texto){
   }
   if(c.op_compleja_cubrir && opCompleja){
     opCompleja.cubrir2 = (c.op_compleja_cubrir==='todo') ? 'todo' : 'deuda';
+    // Solo registrar la elección y mostrar el mensaje de Liza (pedir precio del 2do grano).
+    // No recalculamos ni re-mostramos saldo.
+    if(!c.op_compleja_paso2){
+      agregarMensaje(obj.mensaje || 'Bien. ¿A qué precio cargo el segundo grano?', 'bot');
+      return;
+    }
   }
   if(c.op_compleja_paso2 && opCompleja && opCompleja.saldo){
     if(typeof gemBorrarTodo==='function') gemBorrarTodo();
@@ -3769,37 +3777,42 @@ function procesarRespuesta(texto){
     msg = msg + '\n\nResultado actualizado: por ' + tnReal + ' tn, lo que recibís es ' + recibisReal + '.';
   }
 
-  // PASO 1 de operación compleja: el CÓDIGO calcula el saldo y lo agrega
-  if(enOpComplejaPaso1){
-    const tc = window._lastCalc.tc || 0;
-    const lc = window._lastCalc;
-    let aporteARS = 0;
-    if(typeof liq==='function' && typeof pv==='function'){
-      const tnTotal = pv('k_total')||0;
-      const r = liq(tnTotal, 'pago', lc.p);
-      const plus = lc.plusARStn>0 ? tnTotal*lc.plusARStn : tnTotal*lc.plusUSD*tc;
-      aporteARS = (r.tp||0) + plus;
-    }
-    const saldo = opComplejaCalcularSaldo(aporteARS, tc);
-    opCompleja.aporte1 = aporteARS;
-    // Guardar resumen del paso 1 para el resumen final
-    opCompleja.resumen1 = {
-      grano: (document.getElementById('grano')?.value)||'',
-      tn: gv('res_kilos'),
-      aporte: aporteARS
-    };
-    if(saldo){
-      const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
-      if(saldo.deudaARS<=0 && saldo.cobroARS<=0){
-        msg += '\n\nCon este grano ya cubrís todo. No hace falta un segundo grano.';
-        opComplejaFin();
-      } else {
-        msg += '\n\nLa soja aporta ' + fmt(aporteARS) + '. Queda un saldo pendiente de '
-             + fmt(saldo.deudaARS) + ' de deuda';
-        if(saldo.cobroARS>0) msg += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
-        msg += '. ¿Con el segundo grano cubrimos solo la deuda, o también el saldo a cobrar?';
+  // PASO 1 de operación compleja: el CÓDIGO calcula el saldo.
+  // Solo se muestra UNA vez, cuando ya hay tipo de cambio cargado (sino el saldo en ARS sale mal).
+  if(enOpComplejaPaso1 && !opCompleja.saldoMostrado){
+    const tcCargado = (typeof pv==='function') ? (pv('tc')||0) : 0;
+    if(tcCargado>0){
+      const tc = window._lastCalc.tc || tcCargado;
+      const lc = window._lastCalc;
+      let aporteARS = 0;
+      if(typeof liq==='function' && typeof pv==='function'){
+        const tnTotal = pv('k_total')||0;
+        const r = liq(tnTotal, 'pago', lc.p);
+        const plus = lc.plusARStn>0 ? tnTotal*lc.plusARStn : tnTotal*lc.plusUSD*tc;
+        aporteARS = (r.tp||0) + plus;
+      }
+      const saldo = opComplejaCalcularSaldo(aporteARS, tc);
+      opCompleja.aporte1 = aporteARS;
+      opCompleja.resumen1 = {
+        grano: (document.getElementById('grano')?.value)||'',
+        tn: gv('res_kilos'),
+        aporte: aporteARS
+      };
+      if(saldo){
+        const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+        if(saldo.deudaARS<=0 && saldo.cobroARS<=0){
+          msg += '\n\nCon la soja ya cubrís todo. No hace falta un segundo grano.';
+          opComplejaFin();
+        } else {
+          msg += '\n\nLa soja aporta ' + fmt(aporteARS) + '. Queda un saldo pendiente de '
+               + fmt(saldo.deudaARS) + ' de deuda';
+          if(saldo.cobroARS>0) msg += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
+          msg += '. ¿Con el segundo grano cubrimos solo la deuda, o también el saldo a cobrar?';
+          opCompleja.saldoMostrado = true; // no volver a anexarlo
+        }
       }
     }
+    // si todavía no hay TC, no mostramos saldo: el mensaje de Liza pide el TC y listo
   }
 
   agregarMensaje(msg,'bot');
