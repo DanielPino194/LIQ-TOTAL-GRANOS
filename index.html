@@ -2970,6 +2970,86 @@ function gemEnviar(){
   gemSend(txt);
 }
 
+// ════════════════════════════════════════════════════════════════
+// MÁQUINA DE ESTADOS — OPERACIÓN COMPLEJA (multi-grano encadenada)
+// El CÓDIGO controla los totales y el saldo. Liza solo conversa.
+// ════════════════════════════════════════════════════════════════
+let opCompleja = null; // null = no hay operación compleja en curso
+
+// Inicia/registra una operación compleja con los totales a cubrir
+function opComplejaIniciar(totales){
+  opCompleja = {
+    activa: true,
+    paso: 1,
+    // totales a cubrir (lo que el usuario quiere cancelar/cobrar)
+    deudaUSD: Number(totales.deudaUSD)||0,
+    deudaARS: Number(totales.deudaARS)||0,
+    cobrarUSD: Number(totales.cobrarUSD)||0,
+    cobrarARS: Number(totales.cobrarARS)||0,
+    // aporte del primer grano (se completa al calcular)
+    aporte1: null,
+    // qué cubrir con el segundo grano: 'deuda' | 'todo'
+    cubrir2: null,
+    // saldo pendiente (lo calcula el código)
+    saldo: null
+  };
+  return opCompleja;
+}
+
+// Calcula cuánto NETO (en ARS) produce la cantidad de toneladas actualmente cargada
+// usando el motor real (liq), sin depender de Liza.
+function opComplejaAporteActual(){
+  if(typeof getP!=='function' || typeof liq!=='function') return 0;
+  const p = getP();
+  const tn = (typeof pv==='function') ? (pv('k_total')||0) : 0;
+  if(tn<=0) return 0;
+  // neto total = canje + pago = el productor entrega tn y obtiene este valor en ARS
+  const r = liq(tn, 'pago', p); // 'pago' da el neto cobrable; para canje el tp es similar salvo retenciones
+  // usamos el neto del último cálculo si está disponible (más fiel al reparto real)
+  return r.tp || 0;
+}
+
+// Calcula el saldo pendiente tras el paso 1, en USD y ARS por separado.
+// Regla: la soja cubre PRIMERO la deuda; lo que falta de deuda (y opcionalmente del cobro)
+// se cubre con el segundo grano.
+function opComplejaCalcularSaldo(aporteARS, tcUsado){
+  if(!opCompleja) return null;
+  const tc = Number(tcUsado)||0;
+  // Total de deuda expresado en ARS (la deuda en USD se pesifica)
+  const deudaTotalARS = opCompleja.deudaARS + opCompleja.deudaUSD*tc;
+  const cobrarTotalARS = opCompleja.cobrarARS + opCompleja.cobrarUSD*tc;
+
+  // El aporte del grano 1 cubre primero la deuda, después el cobro
+  let restoAporte = aporteARS;
+  const cubreDeuda = Math.min(restoAporte, deudaTotalARS);
+  restoAporte -= cubreDeuda;
+  const cubreCobro = Math.min(restoAporte, cobrarTotalARS);
+
+  const saldoDeudaARS = Math.max(0, deudaTotalARS - cubreDeuda);
+  const saldoCobroARS = Math.max(0, cobrarTotalARS - cubreCobro);
+
+  opCompleja.saldo = {
+    deudaARS: saldoDeudaARS,
+    cobroARS: saldoCobroARS,
+    // total a cubrir con el grano 2 depende de la elección del usuario
+    totalARS: 0,
+    tc
+  };
+  return opCompleja.saldo;
+}
+
+// Devuelve el saldo a cargar en el paso 2 según lo que el usuario eligió cubrir
+function opComplejaSaldoParaPaso2(){
+  if(!opCompleja || !opCompleja.saldo) return {deudaARS:0, cobrarARS:0};
+  if(opCompleja.cubrir2==='todo'){
+    return { deudaARS: opCompleja.saldo.deudaARS, cobrarARS: opCompleja.saldo.cobroARS };
+  }
+  // por defecto: solo la deuda
+  return { deudaARS: opCompleja.saldo.deudaARS, cobrarARS: 0 };
+}
+
+function opComplejaFin(){ opCompleja = null; }
+
 // ── Reconocimiento de voz ──
 let gemRecognition = null;
 let gemMicActivo = false;
@@ -3117,7 +3197,7 @@ function gemBorrarTodo(){
   // Avisar a Gemini que los datos se borraron, para que NO arrastre los viejos.
   // Mantenemos el hilo del chat, pero marcamos un corte de operación en el historial.
   if(Array.isArray(gemHistorial)){
-    gemHistorial.push({role:'user', parts:[{text:'(Sistema: se borraron todos los datos de la operación anterior. Los campos volvieron a sus valores por defecto: precio 380 dólares, factor 100, comisión 2 por ciento, grano soja, tipo de cambio 1400/1420, sin toneladas, sin deuda y sin importe a cobrar. Olvidá por completo los números de la operación anterior. Para la nueva operación esperá a que el usuario te dé los datos otra vez y no reutilices ningún valor previo.)'}]});
+    gemHistorial.push({role:'user', parts:[{text:'(Sistema: se borraron los CAMPOS de la app y volvieron a sus valores por defecto: precio 380, factor 100, comisión 2 por ciento, grano soja, tipo de cambio 1400/1420, sin toneladas, sin deuda y sin importe a cobrar. No reutilices automáticamente los valores de la operación anterior en los campos. PERO si estás en medio de una OPERACIÓN COMPLEJA de dos granos, SÍ recordás el saldo pendiente que calculaste, para cargar ahora el segundo grano en modo importe con ese saldo como deuda/importe a cobrar. Si no es una operación compleja, esperá a que el usuario te dé los datos nuevos.)'}]});
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'Listo, borré todo. Arrancamos de cero. ¿Qué operación querés hacer?'})}]});
   }
   // NO reinicia el chat visual: los mensajes se mantienen
@@ -3355,6 +3435,30 @@ FLUJO DE CONVERSACION — MUY IMPORTANTE:
 6. El campo "mensaje" NUNCA puede ir vacío, ni tener asteriscos ni símbolos. Siempre algo claro y natural.
 7. Si el usuario dice "listo" o "es todo", cerrá con un resumen final del resultado.
 
+OPERACIÓN COMPLEJA (dos granos encadenados):
+A veces el productor cubre una deuda y/o un importe a cobrar usando DOS granos: una cantidad fija de un grano, y el saldo restante con otro. Ejemplo: "tengo que cancelar 45000 dólares y 20 millones de pesos y cobrar 40 millones, tengo 80 tn de soja a 450000 pesos y el resto lo cubro con maíz a 181".
+IMPORTANTE: el sistema (el código) calcula el saldo y lleva la cuenta. Vos NO calculás el saldo de memoria. Solo conversás y disparás los campos correctos.
+
+PASO 1 — primer grano (cantidad fija que el usuario ya tiene):
+En tu PRIMER respuesta a una operación así, devolvé en "campos":
+- "op_compleja_iniciar": { "deuda_usd": <total>, "deuda_ars": <total>, "cobrar_usd": <total>, "cobrar_ars": <total> }  (los totales que hay que cubrir; poné 0 los que no apliquen)
+- y además los datos del primer grano: modo "kilos", grano, k_total (toneladas), precio (con precio_moneda si es en pesos).
+- Pedí también, si faltan, tipo de cambio y comisión (uno por turno, como siempre).
+El sistema calcula cuánto aporta el primer grano y te muestra el SALDO PENDIENTE en el mensaje, y le pregunta al usuario si con el segundo grano cubre solo la deuda o también el saldo a cobrar. NO inventes el saldo: el sistema lo agrega solo.
+
+ELECCIÓN: cuando el usuario responda qué cubrir, devolvé en "campos":
+- "op_compleja_cubrir": "deuda"   (o "todo" si quiere cubrir también el saldo a cobrar)
+En el mensaje, ofrecé pasar al segundo grano: "¿Arrancamos con el maíz para cubrir ese saldo?"
+
+PASO 2 — segundo grano (cubre el saldo):
+Cuando el usuario confirme, devolvé en "campos":
+- "op_compleja_paso2": true
+- grano (ej: "maiz"), precio (con precio_moneda), y tipo de cambio/comisión si hacen falta.
+NO cargues deuda ni cobro: el sistema pone automáticamente el saldo pendiente que calculó. El sistema te dirá cuántas toneladas del segundo grano hacen falta.
+Después ofrecé el PDF y cerrá con un resumen de los dos pasos.
+
+Mantené el tono tranquilo, un paso por vez.
+
 GENERAR PDF:
 La app puede descargar el detalle de la liquidación en PDF. Si el usuario te pide el PDF ("generame el pdf", "descargame el comprobante", "dame el detalle en pdf", "el pdf del resumen", "pdf del canje", "pdf del pago"), devolvé en "campos" el campo:
   "generar_pdf": "resumen"   (o "canje" o "pago")
@@ -3389,7 +3493,12 @@ REGLA CLAVE sobre "campos": poné ÚNICAMENTE los campos que el usuario mencion�
 - Usuario: "el tipo de cambio ahora es 1450" → campos: { "tc": 1450 }
 - Usuario: "1000 tn de girasol a 440, comisión 2%" → campos con esos tres datos juntos (es la carga inicial).
 La app ya recuerda lo anterior; si repetís todo, se pisan valores y se rompe el cálculo. Cuando es una corrección o un cambio, mandá solo lo que cambia.
-Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf.
+
+MUY IMPORTANTE cuando el usuario CAMBIA un valor para recalcular (precio, tipo de cambio, toneladas, comisión, etc.):
+- Los RESULTADOS CALCULADOS que ves en el estado son los de ANTES del cambio. Todavía no reflejan el valor nuevo.
+- Por eso, cuando cambies un dato, en tu "mensaje" NO digas montos del resultado (no digas "ahora cobrás tanto"). El sistema agrega solo el resultado actualizado correcto.
+- Limitate a confirmar el cambio, por ejemplo: "Listo, actualicé el precio a 450 dólares." y nada más. El número final lo pone el sistema.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2.
 
 Estado actual de la app:
 DATOS INGRESADOS: grano=${granoActual||'(vacio)'}, toneladas=${kActual||'(vacio)'}, precio=${precioActual||'(vacio)'} USD, TC=${tcActual||'(vacio)'}, factor=${factorActual||'100'}%, comision=${comActual||'0'}%, flete corto=${fleteCortoActual||'0'}, flete largo/directo=${fleteLargoActual||'0'}.
@@ -3512,6 +3621,44 @@ function procesarRespuesta(texto){
     });
     return;
   }
+  // ── OPERACIÓN COMPLEJA (máquina de estados en código) ──
+  if(c.op_compleja_iniciar){
+    const t = c.op_compleja_iniciar;
+    opComplejaIniciar({
+      deudaUSD: t.deuda_usd, deudaARS: t.deuda_ars,
+      cobrarUSD: t.cobrar_usd, cobrarARS: t.cobrar_ars
+    });
+  }
+  if(c.op_compleja_cubrir && opCompleja){
+    opCompleja.cubrir2 = (c.op_compleja_cubrir==='todo') ? 'todo' : 'deuda';
+  }
+  if(c.op_compleja_paso2 && opCompleja && opCompleja.saldo){
+    if(typeof gemBorrarTodo==='function') gemBorrarTodo();
+    opCompleja.paso = 2;
+    const saldo = opComplejaSaldoParaPaso2();
+    if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
+    if(typeof setModo==='function') setModo('importe');
+    if(c.precio!==undefined){
+      setInputVal('precio',c.precio);
+      if(c.precio_moneda){
+        const btn=document.getElementById('precio_curr');
+        if(btn && btn.dataset.curr!==c.precio_moneda && typeof toggleCurr==='function') toggleCurr('precio');
+      }
+    }
+    if(c.tc!==undefined) setInputVal('tc',c.tc);
+    if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
+    if(c.com!==undefined) setInputVal('com',c.com);
+    setInputVal('deuda_ars', Math.round(saldo.deudaARS));
+    if(saldo.cobrarARS>0) setInputVal('cobrar_ars', Math.round(saldo.cobrarARS));
+    if(typeof calcular==='function') calcular();
+    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+    const tnNec = gv('res_kilos');
+    let msg = obj.mensaje || '';
+    msg = (msg ? msg + '\n\n' : '') + 'Para cubrir el saldo necesitás ' + tnNec + ' tn de ' + (c.grano||'el segundo grano') + '.';
+    agregarMensaje(msg, 'bot');
+    return;
+  }
+
   if(c.modo && typeof setModo==='function') setModo(c.modo);
   if(c.dest && typeof setDest==='function') setDest(c.dest);
   if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} }
@@ -3562,17 +3709,60 @@ function procesarRespuesta(texto){
     if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
   }
   if(typeof calcular==='function') calcular();
+
+  // Campos que afectan el resultado: si Liza cambió alguno, el mensaje que armó
+  // puede tener números VIEJOS (los generó antes de aplicar el cambio).
+  // En ese caso, reemplazamos por el resultado REAL ya recalculado del DOM.
+  const camposQueRecalculan = ['precio','factor','tc','tc_vendedor','k_total','com',
+    'deuda_usd','deuda_ars','cobrar_usd','cobrar_ars','g_paritarias','g_secada',
+    'g_fumigada','puntos_libres','hum_recibo','flete_corto','flete_largo',
+    'flete_corto_km','flete_largo_km','flete_corto_aj','flete_largo_aj','grano','modo','dest'];
+  const huboCambioCalculo = camposQueRecalculan.some(k => c[k] !== undefined);
+
   // Si Gemini no mando mensaje, armar uno con el resultado recien calculado
   let msg = (obj.mensaje || '').trim();
+  const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+  const recibisReal = gv('res_recibis');
+  const tnReal = gv('res_kilos');
+
   if(!msg){
-    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
-    const recibis = gv('res_recibis');
-    if(recibis && recibis !== '—'){
-      msg = 'Listo. Cobrás aproximadamente ' + recibis + ' en total. Si querés te detallo el cálculo.';
+    if(recibisReal && recibisReal !== '—'){
+      msg = 'Listo. Cobrás aproximadamente ' + recibisReal + ' en total. Si querés te detallo el cálculo.';
     } else {
       msg = 'Cargué los datos. ¿Querés agregar algo más o te muestro el resultado?';
     }
+  } else if(huboCambioCalculo && recibisReal && recibisReal !== '—'){
+    // Anexar el resultado real recalculado, para que no muestre números viejos
+    msg = msg + '\n\nResultado actualizado: por ' + tnReal + ' tn, lo que recibís es ' + recibisReal + '.';
   }
+
+  // Si estamos en el PASO 1 de una operación compleja, el CÓDIGO calcula el saldo
+  if(opCompleja && opCompleja.activa && opCompleja.paso===1 && window._lastCalc){
+    const tc = window._lastCalc.tc || 0;
+    // aporte del grano 1 = neto que produce (canje + pago) leído del cálculo real
+    const lc = window._lastCalc;
+    let aporteARS = 0;
+    if(typeof liq==='function'){
+      const rc = liq(lc.Kc||0,'canje',lc.p), rp = liq(lc.Kp||0,'pago',lc.p);
+      const plusC = lc.plusARStn>0 ? (lc.Kc||0)*lc.plusARStn : (lc.Kc||0)*lc.plusUSD*tc;
+      const plusP = lc.plusARStn>0 ? (lc.Kp||0)*lc.plusARStn : (lc.Kp||0)*lc.plusUSD*tc;
+      aporteARS = (rc.tp+plusC) + (rp.tp+plusP);
+    }
+    const saldo = opComplejaCalcularSaldo(aporteARS, tc);
+    opCompleja.aporte1 = aporteARS;
+    if(saldo){
+      const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+      let resumenSaldo = '\n\nQuedó un saldo pendiente de ' + fmt(saldo.deudaARS) + ' de deuda';
+      if(saldo.cobroARS>0) resumenSaldo += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
+      resumenSaldo += '. ¿Con el maíz cubrimos solo la deuda, o también el saldo a cobrar?';
+      if(saldo.deudaARS<=0 && saldo.cobroARS<=0){
+        resumenSaldo = '\n\nCon este grano ya cubriste todo. No hace falta un segundo grano.';
+        opComplejaFin();
+      }
+      msg = msg + resumenSaldo;
+    }
+  }
+
   agregarMensaje(msg,'bot');
   // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
   if(c.generar_pdf){
