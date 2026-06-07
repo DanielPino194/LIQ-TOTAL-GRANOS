@@ -3472,7 +3472,10 @@ REGLA DE ORO — VOS NUNCA ESCRIBÍS CIFRAS DE RESULTADO:
 
 OPERACIÓN COMPLEJA (dos granos encadenados):
 A veces el productor cubre una deuda y/o un importe a cobrar usando DOS granos: una cantidad fija de un grano, y el saldo restante con otro. Ejemplo: "tengo que cancelar 45000 dólares y 20 millones de pesos y cobrar 40 millones, tengo 80 tn de soja a 450000 pesos y el resto lo cubro con maíz a 181".
-IMPORTANTE: en operación compleja seguís EXCLUSIVAMENTE este flujo. NO uses la secuencia de preguntas 2b (esa es para operaciones simples). El sistema (el código) calcula el saldo y lleva la cuenta. Vos NO calculás el saldo de memoria.
+
+DETECTAR LA OPERACIÓN COMPLEJA A TIEMPO: apenas el usuario diga que tiene una CANTIDAD LIMITADA de un grano y que "el resto" / "el saldo" lo cubre con OTRO grano (aunque lo diga a mitad de la conversación), es una operación compleja. Si ya venías cargando datos como operación simple (grano, precio, tc, comisión), NO los pierdas: reutilizá los que ya tenés. Mandá "op_compleja_iniciar" con los totales a cubrir y completá solo lo que falte del primer grano (por ejemplo las toneladas). Si el precio del primer grano ya lo sabés, NO lo vuelvas a preguntar.
+
+IMPORTANTE: en operación compleja seguís EXCLUSIVAMENTE este flujo. NO uses la secuencia de preguntas 2b. El sistema (el código) calcula el saldo y lleva la cuenta. Vos NO calculás el saldo de memoria.
 
 PASO 1 — primer grano:
 1) Primera respuesta: devolvé en "campos":
@@ -3857,14 +3860,16 @@ function procesarRespuesta(texto){
       };
       if(saldo){
         const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+        const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+        const g1 = granoLbl[(document.getElementById('grano')?.value)] || 'el primer grano';
         if(saldo.deudaARS<=0 && saldo.cobroARS<=0){
-          msg += '\n\nCon la soja ya cubrís todo. No hace falta un segundo grano.';
+          msg += '\n\nCon ' + g1 + ' ya cubrís todo. No hace falta un segundo grano.';
           opComplejaFin();
         } else {
-          msg += '\n\nLa soja aporta ' + fmt(aporteARS) + '. Queda un saldo pendiente de '
+          msg += '\n\n' + g1.charAt(0).toUpperCase()+g1.slice(1) + ' aporta ' + fmt(aporteARS) + '. Queda un saldo pendiente de '
                + fmt(saldo.deudaARS) + ' de deuda';
           if(saldo.cobroARS>0) msg += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
-          msg += '.\n\nSi querés te paso el PDF de esta primera parte (la soja). Y decime: con el segundo grano, ¿cubrimos solo la deuda o también el saldo a cobrar?';
+          msg += '.\n\nSi querés te paso el PDF de esta primera parte. Y decime: con el segundo grano, ¿cubrimos solo la deuda o también el saldo a cobrar?';
           opCompleja.saldoMostrado = true; // no volver a anexarlo
         }
       }
