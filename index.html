@@ -3197,6 +3197,7 @@ function gemBorrarTodo(){
   if(typeof setDest==='function') setDest('auto');
   // Olvidar qué campos había marcado como cargados (arrancamos de cero)
   if(typeof resetCargados==='function') resetCargados();
+  window._resultadoListo = false;
   if(typeof calcular==='function') calcular();
   // Avisar a Gemini que los datos se borraron, para que NO arrastre los viejos.
   // Mantenemos el hilo del chat, pero marcamos un corte de operación en el historial.
@@ -3442,12 +3443,13 @@ FLUJO DE CONVERSACION — MUY IMPORTANTE:
    - "¿Qué grano es: soja, maíz, trigo, cebada o girasol?"
    - En modo importe: "¿De cuánto es la deuda que querés cancelar?" y "¿Cuánto querés cobrar en mano?"
 
-2b. ANTES DE DAR EL RESULTADO FINAL, asegurate de haber preguntado SIEMPRE estas cosas (una por turno, salvo que el usuario ya las haya dicho):
-   a) Tipo de cambio: "¿Qué tipo de cambio usamos? Pasame el comprador, o comprador y vendedor (por ejemplo 1400 y 1420)." Si el usuario pide buscarlo, buscás el dólar divisa del BNA.
-   b) Comisión: "¿Qué comisión te cobran? (por ejemplo 1,5 o 2 por ciento)"
-   c) Factor: "¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?"
-   d) Condiciones de recibo: "¿Querés sumar alguna condición de recibo, como humedad, paritarias, secada, fumigada o flete? ¿O lo dejamos así?"
-   No las amontones: preguntá una, esperá la respuesta, y seguí con la siguiente. Si el usuario ya dio alguna, no la repitas.
+2b. SECUENCIA DE PREGUNTAS OBLIGATORIA antes de cerrar la operación. Después de tener grano, toneladas (o importe) y precio, tenés que ir preguntando ESTO EN ORDEN, una por turno. NO calcules ni cierres hasta haber pasado por las cuatro:
+   PASO a) Tipo de cambio: "¿Qué tipo de cambio usamos? Pasame el comprador y vendedor (por ejemplo 1400 y 1420), o si querés busco el dólar divisa del Banco Nación." Si el usuario pide buscarlo, lo buscás. Una vez cargado y confirmado el TC, PASÁ A LA PREGUNTA b. NO calcules todavía.
+   PASO b) Comisión: "¿Qué comisión te cobran? (por ejemplo 1,5 o 2 por ciento)"
+   PASO c) Factor: "¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?"
+   PASO d) Condiciones de recibo: "¿Querés sumar alguna condición de recibo (humedad, paritarias, secada, fumigada o flete), o lo dejamos así?"
+   REGLA: una pregunta por turno, esperás la respuesta, seguís con la próxima. Si el usuario ya dio alguna (ej: dijo la comisión al principio), NO la repitas y saltá a la siguiente que falte. Recién cuando pasaste por las cuatro (o el usuario dijo "dale así", "calculá ya", "está bien así") devolvé en "campos" el campo "mostrar_resultado": true para que el sistema muestre el resultado. ANTES de eso NO se muestra ningún resultado.
+   MUY IMPORTANTE: cargar el tipo de cambio NO significa que ya terminaste. Después del TC todavía faltan comisión, factor y condiciones de recibo. No saltees al resultado apenas tengas el TC.
 
 REGLA DE ORO — VOS NUNCA ESCRIBÍS CIFRAS DE RESULTADO:
 - El SISTEMA es el único que escribe los números del resultado (montos, toneladas, lo que recibís, saldos). Vos NUNCA los escribís, ni al calcular, ni al recalcular, ni al cambiar un flete o un precio.
@@ -3537,7 +3539,7 @@ MUY IMPORTANTE cuando el usuario CAMBIA un valor para recalcular (precio, tipo d
 - Los RESULTADOS CALCULADOS que ves en el estado son los de ANTES del cambio. Todavía no reflejan el valor nuevo.
 - Por eso, cuando cambies un dato, en tu "mensaje" NO digas montos del resultado (no digas "ahora cobrás tanto"). El sistema agrega solo el resultado actualizado correcto.
 - Limitate a confirmar el cambio, por ejemplo: "Listo, actualicé el precio a 450 dólares." y nada más. El número final lo pone el sistema.
-Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2.
+Las claves de "campos" son exactamente: modo, dest, grano, k_total, precio, precio_moneda, factor, tc, tc_vendedor, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, com, g_paritarias, g_secada, g_fumigada, puntos_libres, hum_recibo, flete_corto, flete_corto_moneda, flete_largo, flete_largo_moneda, flete_largo_tipo, flete_corto_km, flete_corto_aj, flete_largo_km, flete_largo_aj, buscar_web, reiniciar, generar_pdf, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, mostrar_resultado.
 
 Estado actual de la app (lo que marca "(falta, preguntar)" todavía NO lo dio el usuario; tenés que preguntarlo, no lo inventes ni calcules con un valor por defecto):
 DATOS INGRESADOS: grano=${granoActual}, toneladas=${kActual}, precio=${precioActual}, factor=${factorActual}, comision=${comActual}, TC=${tcActual}, flete corto=${fleteCortoActual}, flete largo/directo=${fleteLargoActual}.
@@ -3792,6 +3794,11 @@ function procesarRespuesta(texto){
   // Mínimo: grano, precio Y tipo de cambio. Sin eso, no mostramos resultado.
   const datosMinimos = camposCargados['grano'] && camposCargados['precio'] && camposCargados['tc'];
 
+  // El resultado se muestra cuando Liza termina las preguntas (mostrar_resultado) o cuando
+  // ya se mostró una vez (después, los recálculos se reflejan solos). Antes de eso, no.
+  if(c.mostrar_resultado) window._resultadoListo = true;
+  const puedeMostrarResultado = datosMinimos && (window._resultadoListo || c.mostrar_resultado);
+
   // Si Gemini no mando mensaje, armar uno con el resultado recien calculado
   let msg = (obj.mensaje || '').trim();
   const gv = id => document.getElementById(id)?.textContent?.trim() || '';
@@ -3803,7 +3810,7 @@ function procesarRespuesta(texto){
   if(!msg){
     if(enOpComplejaPaso1){
       msg = 'Listo, cargué el primer grano.';
-    } else if(datosMinimos && recibisReal && recibisReal !== '—'){
+    } else if(puedeMostrarResultado && recibisReal && recibisReal !== '—'){
       // En modo importe, lo relevante son las toneladas necesarias, no "lo que recibís"
       const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
       if(esImporte){
@@ -3814,8 +3821,8 @@ function procesarRespuesta(texto){
     } else {
       msg = 'Cargué los datos. ¿Querés agregar algo más o te muestro el resultado?';
     }
-  } else if(!enOpComplejaPaso1 && datosMinimos && huboCambioCalculo && recibisReal && recibisReal !== '—'){
-    // Anexar el resultado real recalculado solo si hay datos mínimos cargados
+  } else if(!enOpComplejaPaso1 && puedeMostrarResultado && (huboCambioCalculo || c.mostrar_resultado) && recibisReal && recibisReal !== '—'){
+    // Anexar el resultado real recalculado solo si ya corresponde mostrarlo
     const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
     if(esImporte){
       msg = msg + '\n\nNecesitás ' + tnReal + ' tn para cubrir lo que pediste.';
@@ -3867,7 +3874,11 @@ function procesarRespuesta(texto){
   if(c.generar_pdf){
     let tipo = (''+c.generar_pdf).toLowerCase();
     if(tipo!=='canje' && tipo!=='pago') tipo='resumen';
-    if(!window._lastCalc){
+    // Verificar que el USUARIO haya cargado datos reales (no los defaults de la app).
+    // En operación compleja completada (paso 3) sí hay datos del 2do grano.
+    const hayDatosReales = (camposCargados['grano'] && camposCargados['precio'])
+      || (opCompleja && opCompleja.paso===3);
+    if(!hayDatosReales){
       agregarMensaje('Para generar el PDF necesito la operación cargada: grano, toneladas y precio. ¿Me los pasás?', 'bot');
     } else if(typeof descargarPDF==='function'){
       try{ descargarPDF(tipo); }
