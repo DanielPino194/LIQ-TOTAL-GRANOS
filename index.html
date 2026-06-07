@@ -3442,9 +3442,9 @@ IMPORTANTE: el sistema (el código) calcula el saldo y lleva la cuenta. Vos NO c
 PASO 1 — primer grano (cantidad fija que el usuario ya tiene):
 En tu PRIMER respuesta a una operación así, devolvé en "campos":
 - "op_compleja_iniciar": { "deuda_usd": <total>, "deuda_ars": <total>, "cobrar_usd": <total>, "cobrar_ars": <total> }  (los totales que hay que cubrir; poné 0 los que no apliquen)
-- y además los datos del primer grano: modo "kilos", grano, k_total (toneladas), precio (con precio_moneda si es en pesos).
-- Pedí también, si faltan, tipo de cambio y comisión (uno por turno, como siempre).
-El sistema calcula cuánto aporta el primer grano y te muestra el SALDO PENDIENTE en el mensaje, y le pregunta al usuario si con el segundo grano cubre solo la deuda o también el saldo a cobrar. NO inventes el saldo: el sistema lo agrega solo.
+- y además los datos del primer grano: modo "kilos", grano, k_total (toneladas), precio (con precio_moneda si es en pesos). Si el usuario dio comisión o flete, cargalos también.
+- Pedí, si faltan, tipo de cambio y comisión (uno por turno).
+MUY IMPORTANTE: en tu "mensaje" del paso 1 NO digas montos del saldo ni inventes cuánto falta. El sistema calcula el saldo exacto y lo agrega solo, junto con la pregunta de qué cubrir con el segundo grano. Tu mensaje debe ser corto, por ejemplo: "Listo, cargué la soja." y nada más sobre números. No repitas la pregunta del saldo: la hace el sistema.
 
 ELECCIÓN: cuando el usuario responda qué cubrir, devolvé en "campos":
 - "op_compleja_cubrir": "deuda"   (o "todo" si quiere cubrir también el saldo a cobrar)
@@ -3472,9 +3472,15 @@ y en el "mensaje" confirmá brevemente, ej: "Listo, borré todo. Contame la nuev
 IMPORTANTE: despues de reiniciar, los datos de la operacion anterior (grano, toneladas, precio, fletes, etc.) quedaron BORRADOS. Para la nueva operacion NO reuses esos datos viejos: esperá a que el usuario te los diga de nuevo. Igual seguís recordando el hilo de la charla (podés referirte a lo que hablaron), pero arrancás la carga desde cero.
 
 BUSQUEDA EN LA WEB EN TIEMPO REAL:
-Podés buscar datos actuales en internet (por ejemplo el dólar/tipo de cambio Banco Nación, precios de pizarra de granos, etc). Si el usuario te pide un dato que no sabés o que cambia a diario (ej: "buscá el dolar banco nacion", "que precio tiene la soja hoy", "poné el tipo de cambio actual"), devolvé en "campos" un campo especial:
-  "buscar_web": "la consulta a buscar, ej: tipo de cambio dolar divisa Banco Nacion Argentina hoy"
-Cuando uses "buscar_web", NO inventes el dato: en el "mensaje" decí algo como "Dejame buscar el dato actualizado...". El sistema va a buscar y te va a pasar el resultado en el proximo turno para que lo uses (ej: cargá el tc con el numero encontrado).
+Podés buscar datos actuales en internet (tipo de cambio del Banco Nación, precios de pizarra de granos, etc). Si el usuario te pide un dato que no sabés o que cambia a diario, devolvé en "campos" un campo especial:
+  "buscar_web": "la consulta exacta a buscar"
+Cuando uses "buscar_web", NO inventes el dato: en el "mensaje" decí algo como "Dejame buscar el dato actualizado...". El sistema busca y te pasa el resultado en el próximo turno para que lo uses.
+
+TIPO DE CAMBIO POR DEFECTO: cuando necesites el tipo de cambio y el usuario no te lo dio, NO uses 1400/1420 fijo. Mejor proponé buscar el ÚLTIMO dólar DIVISA del Banco Nación. Para eso devolvé:
+  "buscar_web": "dólar divisa Banco Nación Argentina hoy compra y venta (no billete)"
+y en el mensaje avisá: "Busco el último dólar divisa del Banco Nación, dame un segundo."
+Cuando te llegue el resultado de la búsqueda: usá SOLO el valor del dólar DIVISA (no el billete). Cargá la COMPRA en "tc" y la VENTA en "tc_vendedor". Confirmale al usuario qué valores cargaste y de qué fecha son, por ejemplo: "Cargué el dólar divisa del BNA: compra 1.410, venta 1.460, del viernes 5 de junio. ¿Te sirve o preferís otro?"
+Si el usuario después dice que querés otro valor, cargá el que te diga.
 
 MUY IMPORTANTE - cuando NO entiendas o el usuario diga algo confuso:
 - NUNCA respondas solo "no entendi" o mandes el mensaje generico de bienvenida.
@@ -3545,7 +3551,12 @@ ${bloqueResultados}`;
 
 // Busca un dato en tiempo real usando Gemini + Google Search (llamada SEPARADA, sin JSON)
 async function buscarDatoWeb(consulta){
-  const sys = 'Sos un asistente que busca datos en tiempo real en Argentina. Respondé de forma BREVE y directa, solo el dato pedido con su fuente y fecha. Si es un tipo de cambio, dá el numero en pesos. No inventes: si no encontrás el dato, decilo.';
+  const sys = 'Sos un asistente que busca datos financieros en tiempo real en Argentina. Respondé BREVE y directo: solo el dato pedido, con la fuente y la fecha exacta del dato.\n'
+    + 'MUY IMPORTANTE sobre tipos de cambio del Banco Nación (BNA):\n'
+    + '- El Banco Nación publica DOS cotizaciones distintas: el dólar BILLETE (efectivo, para personas) y el dólar DIVISA (transferencias/comercio exterior, suele ser un poco más bajo). NO son lo mismo.\n'
+    + '- Si te piden el DIVISA, devolvé SOLO el dólar divisa del BNA (compra y venta), nunca el billete. Si solo encontrás el billete, aclaralo y decí que no encontraste el divisa.\n'
+    + '- Dá siempre la fecha del dato (por ejemplo "al cierre del viernes 5 de junio") y la compra y la venta por separado, en pesos.\n'
+    + 'No inventes: si no encontrás el dato exacto que piden, decilo claramente.';
   try{
     const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
       method:'POST',
@@ -3616,7 +3627,7 @@ function procesarRespuesta(texto){
     buscarDatoWeb(c.buscar_web).then(resultado=>{
       document.getElementById('gem-loading-web')?.remove();
       // Reinyectar el resultado como contexto y pedir a Gemini que lo use
-      const aviso = 'Resultado de la busqueda web para "'+c.buscar_web+'": '+resultado+'. Usá este dato para continuar (por ejemplo cargá el tipo de cambio si corresponde) y confirmáselo al usuario.';
+      const aviso = 'Resultado de la busqueda web para "'+c.buscar_web+'": '+resultado+'. Usá este dato para continuar. Si es un tipo de cambio del Banco Nación, usá SOLO el dólar DIVISA (no el billete): cargá la compra en tc y la venta en tc_vendedor, y confirmale al usuario los valores y la fecha. Si el resultado solo trae el billete, avisale que no encontraste el divisa y preguntale si quiere cargar otro valor.';
       gemSend(aviso, true);
     });
     return;
@@ -3627,6 +3638,11 @@ function procesarRespuesta(texto){
     opComplejaIniciar({
       deudaUSD: t.deuda_usd, deudaARS: t.deuda_ars,
       cobrarUSD: t.cobrar_usd, cobrarARS: t.cobrar_ars
+    });
+    // En el paso 1 la soja se calcula LIMPIA (sin deuda/cobro en la app);
+    // el código maneja los totales aparte. Forzamos esos campos en cero.
+    ['deuda_usd','deuda_ars','cobrar_usd','cobrar_ars'].forEach(id=>{
+      const el=document.getElementById(id); if(el){ el.value='0'; el.dispatchEvent(new Event('input')); }
     });
   }
   if(c.op_compleja_cubrir && opCompleja){
@@ -3653,9 +3669,22 @@ function procesarRespuesta(texto){
     if(typeof calcular==='function') calcular();
     const gv = id => document.getElementById(id)?.textContent?.trim() || '';
     const tnNec = gv('res_kilos');
-    let msg = obj.mensaje || '';
-    msg = (msg ? msg + '\n\n' : '') + 'Para cubrir el saldo necesitás ' + tnNec + ' tn de ' + (c.grano||'el segundo grano') + '.';
+    const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+    const r1 = opCompleja.resumen1 || {};
+    const granoLbl = {soja:'soja',maiz:'maíz',trigo:'trigo',cebada:'cebada',girasol:'girasol'};
+    let msg = (obj.mensaje ? obj.mensaje + '\n\n' : '');
+    msg += 'Resumen de la operación completa:\n';
+    if(r1.tn){
+      msg += '· Paso 1: ' + r1.tn + ' tn de ' + (granoLbl[r1.grano]||r1.grano||'soja')
+           + ' que aportan ' + fmt(r1.aporte||0) + '.\n';
+    }
+    msg += '· Paso 2: ' + tnNec + ' tn de ' + (granoLbl[c.grano]||c.grano||'maíz')
+         + ' para cubrir el saldo';
+    if(opCompleja.cubrir2==='todo') msg += ' (deuda + lo que querés cobrar).';
+    else msg += ' de la deuda.';
+    msg += '\n\nCon eso queda cerrada la operación. ¿Querés el PDF de esta segunda parte?';
     agregarMensaje(msg, 'bot');
+    opCompleja.paso = 3; // operación completada
     return;
   }
 
@@ -3725,41 +3754,51 @@ function procesarRespuesta(texto){
   const recibisReal = gv('res_recibis');
   const tnReal = gv('res_kilos');
 
+  const enOpComplejaPaso1 = opCompleja && opCompleja.activa && opCompleja.paso===1 && window._lastCalc;
+
   if(!msg){
-    if(recibisReal && recibisReal !== '—'){
+    if(enOpComplejaPaso1){
+      msg = 'Listo, cargué el primer grano.';
+    } else if(recibisReal && recibisReal !== '—'){
       msg = 'Listo. Cobrás aproximadamente ' + recibisReal + ' en total. Si querés te detallo el cálculo.';
     } else {
       msg = 'Cargué los datos. ¿Querés agregar algo más o te muestro el resultado?';
     }
-  } else if(huboCambioCalculo && recibisReal && recibisReal !== '—'){
-    // Anexar el resultado real recalculado, para que no muestre números viejos
+  } else if(!enOpComplejaPaso1 && huboCambioCalculo && recibisReal && recibisReal !== '—'){
+    // Anexar el resultado real recalculado (solo fuera de op compleja paso 1)
     msg = msg + '\n\nResultado actualizado: por ' + tnReal + ' tn, lo que recibís es ' + recibisReal + '.';
   }
 
-  // Si estamos en el PASO 1 de una operación compleja, el CÓDIGO calcula el saldo
-  if(opCompleja && opCompleja.activa && opCompleja.paso===1 && window._lastCalc){
+  // PASO 1 de operación compleja: el CÓDIGO calcula el saldo y lo agrega
+  if(enOpComplejaPaso1){
     const tc = window._lastCalc.tc || 0;
-    // aporte del grano 1 = neto que produce (canje + pago) leído del cálculo real
     const lc = window._lastCalc;
     let aporteARS = 0;
-    if(typeof liq==='function'){
-      const rc = liq(lc.Kc||0,'canje',lc.p), rp = liq(lc.Kp||0,'pago',lc.p);
-      const plusC = lc.plusARStn>0 ? (lc.Kc||0)*lc.plusARStn : (lc.Kc||0)*lc.plusUSD*tc;
-      const plusP = lc.plusARStn>0 ? (lc.Kp||0)*lc.plusARStn : (lc.Kp||0)*lc.plusUSD*tc;
-      aporteARS = (rc.tp+plusC) + (rp.tp+plusP);
+    if(typeof liq==='function' && typeof pv==='function'){
+      const tnTotal = pv('k_total')||0;
+      const r = liq(tnTotal, 'pago', lc.p);
+      const plus = lc.plusARStn>0 ? tnTotal*lc.plusARStn : tnTotal*lc.plusUSD*tc;
+      aporteARS = (r.tp||0) + plus;
     }
     const saldo = opComplejaCalcularSaldo(aporteARS, tc);
     opCompleja.aporte1 = aporteARS;
+    // Guardar resumen del paso 1 para el resumen final
+    opCompleja.resumen1 = {
+      grano: (document.getElementById('grano')?.value)||'',
+      tn: gv('res_kilos'),
+      aporte: aporteARS
+    };
     if(saldo){
       const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
-      let resumenSaldo = '\n\nQuedó un saldo pendiente de ' + fmt(saldo.deudaARS) + ' de deuda';
-      if(saldo.cobroARS>0) resumenSaldo += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
-      resumenSaldo += '. ¿Con el maíz cubrimos solo la deuda, o también el saldo a cobrar?';
       if(saldo.deudaARS<=0 && saldo.cobroARS<=0){
-        resumenSaldo = '\n\nCon este grano ya cubriste todo. No hace falta un segundo grano.';
+        msg += '\n\nCon este grano ya cubrís todo. No hace falta un segundo grano.';
         opComplejaFin();
+      } else {
+        msg += '\n\nLa soja aporta ' + fmt(aporteARS) + '. Queda un saldo pendiente de '
+             + fmt(saldo.deudaARS) + ' de deuda';
+        if(saldo.cobroARS>0) msg += ' y ' + fmt(saldo.cobroARS) + ' de lo que querés cobrar';
+        msg += '. ¿Con el segundo grano cubrimos solo la deuda, o también el saldo a cobrar?';
       }
-      msg = msg + resumenSaldo;
     }
   }
 
