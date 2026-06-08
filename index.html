@@ -3555,6 +3555,11 @@ ${bloqueResultados}${bloqueOpCompleja}
 <que_hacer_ahora>
 El sistema lleva el control del flujo. Este es el paso EXACTO en el que estás ahora. Hacé ESTO y solo esto (salvo que el usuario cambie de tema o corrija un dato anterior):
 ${(typeof flujoEstado==='function') ? flujoEstado().instruccion : ''}
+
+REGLA DE ENCADENADO (muy importante): cuando el usuario te da un dato, en tu mensaje confirmalo en pocas palabras Y EN EL MISMO MENSAJE hacé la pregunta de este paso. NO cortes después de confirmar. El usuario no debería tener que decirte "seguí" o "dale" para que avances.
+- MAL: "Listo, cargué la comisión." (te quedás esperando)
+- BIEN: "Listo, la comisión queda en 2 por ciento. ¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?"
+Siempre confirmás el dato anterior y preguntás lo siguiente en una sola respuesta.
 </que_hacer_ahora>`;
 
 
