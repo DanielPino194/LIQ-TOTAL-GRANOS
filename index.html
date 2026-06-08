@@ -3055,6 +3055,73 @@ function opComplejaSaldoParaPaso2(){
 
 function opComplejaFin(){ opCompleja = null; }
 
+// ════════════════════════════════════════════════════════════════
+// MÁQUINA DE ESTADOS DEL FLUJO CONVERSACIONAL
+// El código determina QUÉ preguntar en cada momento. Liza solo interpreta
+// la respuesta del usuario y devuelve el valor. No decide el orden.
+// ════════════════════════════════════════════════════════════════
+
+// Flags de "ya preguntado" para campos opcionales (factor, recibo).
+// Esto distingue "el usuario no lo dijo todavía" de "ya lo preguntamos y dijo que no".
+let flujoPreguntado = {};
+function resetFlujo(){ flujoPreguntado = {}; }
+function marcarPreguntado(...ks){ ks.forEach(k=>{ flujoPreguntado[k]=true; }); }
+
+// Devuelve el estado actual del flujo: { estado, instruccion }
+// 'instruccion' es el texto que se le inyecta a Liza diciéndole exactamente qué hacer.
+function flujoEstado(){
+  const cargado = (id) => !!camposCargados[id];
+  const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
+
+  // ---- OPERACIÓN COMPLEJA ----
+  if(opCompleja && opCompleja.activa){
+    // PASO 1: cargar y definir condiciones del primer grano
+    if(opCompleja.paso === 1){
+      if(!cargado('grano')) return est('C1_GRANO', 'Falta el PRIMER grano. Preguntá: "¿Qué grano vas a vender primero?". Cargalo con "grano".');
+      if(!cargado('k_total')) return est('C1_TN', 'Faltan las toneladas del primer grano. Preguntá cuántas toneladas tiene. Cargá "k_total".');
+      if(!cargado('precio')) return est('C1_PRECIO', 'Falta el precio del primer grano. Preguntá a qué precio lo vende. Cargá "precio" y "precio_moneda".');
+      if(!cargado('tc')) return est('C1_TC', 'Falta el tipo de cambio. Preguntá: "¿Qué tipo de cambio usamos? Comprador y vendedor, o busco el divisa del BNA." Si pide buscarlo, usá "buscar_web".');
+      if(!cargado('com')) return est('C1_COM', 'Falta la comisión. Preguntá: "¿Qué comisión te cobran?". Cargá "com".');
+      if(!flujoPreguntado['factor1']) return est('C1_FACTOR', 'Preguntá: "¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?". Si da un número, cargá "factor". Si dice que no/queda en 100, igual marcá factor preguntado mandando "factor": 100.');
+      if(!flujoPreguntado['recibo1']) return est('C1_RECIBO', 'Preguntá: "¿Sumamos alguna condición de recibo (humedad, paritarias, secada, fumigada, flete), o lo dejamos así?". Si suma algo, cargá los campos. Cuando el usuario termine o diga que no, mandá "op_compleja_calcular_saldo": true para que el sistema muestre el saldo.');
+      return est('C1_LISTO', 'Ya están todos los datos del primer grano. Mandá "op_compleja_calcular_saldo": true para mostrar el saldo.');
+    }
+    // Tras mostrar saldo, elegir qué cubrir
+    if(opCompleja.paso === 1 && opCompleja.saldoMostrado && !opCompleja.cubrir2){
+      return est('C_CUBRIR', 'El usuario debe elegir qué cubrir con el segundo grano. Según responda, mandá "op_compleja_cubrir": "deuda" o "todo".');
+    }
+    // PASO 2: segundo grano
+    if(opCompleja.paso === 2){
+      const g2 = opCompleja.grano2 || 'el segundo grano';
+      if(!cargado('precio')) return est('C2_PRECIO', 'Falta el precio del segundo grano ('+g2+'). Pedilo y mandá "op_compleja_paso2": true con grano y precio.');
+      if(!cargado('com')) return est('C2_COM', 'Preguntá la comisión del '+g2+'. Cargá "com".');
+      if(!flujoPreguntado['factor2']) return est('C2_FACTOR', 'Preguntá si aplica factor al '+g2+' o queda en 100. Cargá "factor" (o 100 si no).');
+      if(!flujoPreguntado['recibo2']) return est('C2_RECIBO', 'Preguntá si suma condiciones de recibo al '+g2+'. Cuando termine, mandá "op_compleja_cerrar": true.');
+      return est('C2_LISTO', 'Ya están las condiciones del segundo grano. Mandá "op_compleja_cerrar": true para el resumen final.');
+    }
+    if(opCompleja.paso === 3){
+      return est('C_CERRADO', 'La operación compleja está cerrada. Si el usuario pide PDF mandá "generar_pdf". Si pide cambiar algo del segundo grano, mandá ese campo.');
+    }
+  }
+
+  // ---- OPERACIÓN SIMPLE ----
+  if(!cargado('grano')) return est('S_GRANO', 'Falta el grano. Preguntá qué grano va a vender. Cargá "grano".');
+  if(esImporte){
+    const hayMonto = cargado('deuda_usd')||cargado('deuda_ars')||cargado('cobrar_usd')||cargado('cobrar_ars');
+    if(!hayMonto) return est('S_MONTO', 'Falta el monto a cubrir. Preguntá cuánto debe cancelar o cobrar. Cargá deuda_/cobrar_.');
+  } else {
+    if(!cargado('k_total')) return est('S_TN', 'Faltan las toneladas. Preguntá cuántas toneladas tiene. Cargá "k_total".');
+  }
+  if(!cargado('precio')) return est('S_PRECIO', 'Falta el precio. Preguntá a qué precio vende. Cargá "precio" y "precio_moneda".');
+  if(!cargado('tc')) return est('S_TC', 'Falta el tipo de cambio. Preguntá comprador y vendedor, o ofrecé buscar el divisa del BNA ("buscar_web").');
+  if(!cargado('com')) return est('S_COM', 'Falta la comisión. Preguntá: "¿Qué comisión te cobran?". Cargá "com".');
+  if(!flujoPreguntado['factorS']) return est('S_FACTOR', 'Preguntá si aplica factor o queda en 100. Cargá "factor" (o 100 si no).');
+  if(!flujoPreguntado['reciboS']) return est('S_RECIBO', 'Preguntá si suma condiciones de recibo. Cuando termine o diga que no, mandá "mostrar_resultado": true.');
+  if(!window._resultadoListo) return est('S_LISTO', 'Ya están todos los datos. Mandá "mostrar_resultado": true.');
+  return est('S_RESUELTO', 'La operación ya tiene resultado. Si el usuario cambia un dato, mandá solo ese campo. Si pide PDF, mandá "generar_pdf".');
+}
+function est(estado, instruccion){ return { estado, instruccion }; }
+
 // ── Reconocimiento de voz ──
 let gemRecognition = null;
 let gemMicActivo = false;
@@ -3200,6 +3267,7 @@ function gemBorrarTodo(){
   if(typeof setDest==='function') setDest('auto');
   // Olvidar qué campos había marcado como cargados (arrancamos de cero)
   if(typeof resetCargados==='function') resetCargados();
+  if(typeof resetFlujo==='function') resetFlujo();
   window._resultadoListo = false;
   if(typeof calcular==='function') calcular();
   // Avisar a Gemini que los datos se borraron, para que NO arrastre los viejos.
@@ -3377,7 +3445,7 @@ Razón: los resultados en el estado son de ANTES del cambio. Si los repetís, de
 </regla_de_oro>
 
 <claves_validas>
-grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo.
+grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar.
 </claves_validas>
 
 <deteccion_tipo_operacion>
@@ -3447,11 +3515,13 @@ PASO 2 — ELECCIÓN + SEGUNDO GRANO:
 
 2b) Con el precio, mandá:
     "op_compleja_paso2": true, grano: "[grano2 real]", precio: N, precio_moneda: "usd"/"ars".
-    NO cargues deuda ni cobro (el sistema pone el saldo). El sistema muestra toneladas necesarias y resumen.
+    NO cargues deuda ni cobro (el sistema pone el saldo). El sistema carga el segundo grano y te pide la comisión.
 
-2c) Después del paso 2, preguntá las condiciones del SEGUNDO grano, una por turno: comisión, factor, condiciones de recibo (el TC ya está del paso 1). Si el usuario dice "lo mismo" o "así está bien", dejalo. Cuando cambies alguna, mandá solo ese campo.
+2c) Preguntá las condiciones del SEGUNDO grano, UNA por turno y en orden: comisión, factor, condiciones de recibo (el TC ya está del paso 1). Mandá cada dato como campo normal (com, factor, hum_recibo, flete_largo_km, etc.). Si el usuario dice "lo mismo", "así está bien" o "nada", saltá al cierre.
 
-2d) Ofrecé el PDF con "generar_pdf": "resumen".
+2d) Cuando terminaste las condiciones del segundo grano, mandá "op_compleja_cerrar": true. El SISTEMA muestra el resumen final de los dos pasos y ofrece el PDF.
+
+2e) Si el usuario pide el PDF, mandá "generar_pdf": "resumen".
 </flujo_complejo>
 
 <buscar_web>
@@ -3479,7 +3549,13 @@ Ejemplo: "flete directo 350 km menos 15%" → flete_largo_km: 350, flete_largo_t
 <estado_actual>
 Lo que marca "(falta, preguntar)" NO lo dio el usuario: preguntalo, no lo inventes.
 DATOS: grano=${granoActual}, toneladas=${kActual}, precio=${precioActual}, factor=${factorActual}, comision=${comActual}, TC=${tcActual}, flete_corto=${fleteCortoActual}, flete_largo=${fleteLargoActual}.
-${bloqueResultados}${bloqueOpCompleja}`;
+${bloqueResultados}${bloqueOpCompleja}
+</estado_actual>
+
+<que_hacer_ahora>
+El sistema lleva el control del flujo. Este es el paso EXACTO en el que estás ahora. Hacé ESTO y solo esto (salvo que el usuario cambie de tema o corrija un dato anterior):
+${(typeof flujoEstado==='function') ? flujoEstado().instruccion : ''}
+</que_hacer_ahora>`;
 
 
   // Agregar turno del usuario al historial
@@ -3581,6 +3657,26 @@ function procesarRespuesta(texto){
     return;
   }
   const c = obj.campos || {};
+
+  // ── Marcar campos opcionales como "ya preguntados" según el estado del flujo ──
+  // Esto avanza la máquina de estados: una vez preguntado factor/recibo, no se vuelve a pedir.
+  const _est = (typeof flujoEstado==='function') ? flujoEstado().estado : '';
+  // factor: si llega el campo factor, o si estamos en el estado de factor y el usuario respondió
+  if(c.factor!==undefined || _est==='C1_FACTOR' || _est==='C2_FACTOR' || _est==='S_FACTOR'){
+    if(_est==='C1_FACTOR'||opCompleja&&opCompleja.paso===1) marcarPreguntado('factor1');
+    if(_est==='C2_FACTOR'||opCompleja&&opCompleja.paso===2) marcarPreguntado('factor2');
+    if(!opCompleja) marcarPreguntado('factorS');
+  }
+  // recibo: si llega cualquier condición de recibo, o el disparador de seguir
+  const llegaRecibo = c.hum_recibo!==undefined||c.g_paritarias!==undefined||c.g_secada!==undefined
+    ||c.g_fumigada!==undefined||c.flete_corto_km!==undefined||c.flete_largo_km!==undefined
+    ||c.flete_corto!==undefined||c.flete_largo!==undefined||c.puntos_libres!==undefined;
+  if(llegaRecibo || c.op_compleja_calcular_saldo || c.op_compleja_cerrar || c.mostrar_resultado){
+    if(opCompleja&&opCompleja.paso===1) marcarPreguntado('recibo1','factor1');
+    else if(opCompleja&&opCompleja.paso===2) marcarPreguntado('recibo2','factor2');
+    else marcarPreguntado('reciboS','factorS');
+  }
+
   // Si el usuario pidió borrar/empezar de nuevo (limpia campos, mantiene el chat)
   if(c.reiniciar){
     if(typeof gemBorrarTodo==='function') gemBorrarTodo();
@@ -3634,27 +3730,41 @@ function procesarRespuesta(texto){
     const saldo = opComplejaSaldoParaPaso2();
     // El grano2 guardado al inicio MANDA. Liza puede equivocarse, el código no.
     const granoPaso2 = opCompleja.grano2 || c.grano;
-    if(granoPaso2){ const s=document.getElementById('grano'); if(s){s.value=granoPaso2;s.dispatchEvent(new Event('change'));} }
+    if(granoPaso2){ const s=document.getElementById('grano'); if(s){s.value=granoPaso2;s.dispatchEvent(new Event('change'));} marcarCargado('grano'); }
     if(typeof setModo==='function') setModo('importe');
     if(c.precio!==undefined){
       setInputVal('precio',c.precio);
+      marcarCargado('precio');
       if(c.precio_moneda){
         const btn=document.getElementById('precio_curr');
         if(btn && btn.dataset.curr!==c.precio_moneda && typeof toggleCurr==='function') toggleCurr('precio');
       }
     }
+    // El TC viene del paso 1; lo restauramos (gemBorrarTodo lo dejó en default)
+    if(opCompleja.tcComprador) setInputVal('tc', opCompleja.tcComprador);
+    if(opCompleja.tcVendedor) setInputVal('tc_vendedor', opCompleja.tcVendedor);
+    marcarCargado('tc');
     if(c.tc!==undefined) setInputVal('tc',c.tc);
     if(c.tc_vendedor!==undefined) setInputVal('tc_vendedor',c.tc_vendedor);
-    if(c.com!==undefined) setInputVal('com',c.com);
+    if(c.com!==undefined){ setInputVal('com',c.com); marcarCargado('com'); }
     setInputVal('deuda_ars', Math.round(saldo.deudaARS));
     if(saldo.cobrarARS>0) setInputVal('cobrar_ars', Math.round(saldo.cobrarARS));
+    if(typeof calcular==='function') calcular();
+    // NO cerramos todavía: falta preguntar las condiciones del segundo grano.
+    const g2 = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'}[granoPaso2] || 'el segundo grano';
+    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+    agregarMensaje('Listo, cargué ' + g2 + '. Para ' + g2 + ', ¿qué comisión te cobran?', 'bot');
+    return;
+  }
+  // Cierre de la operación compleja: después de definir las condiciones del segundo grano
+  if(c.op_compleja_cerrar && opCompleja && opCompleja.paso===2){
     if(typeof calcular==='function') calcular();
     const gv = id => document.getElementById(id)?.textContent?.trim() || '';
     const tnNec = gv('res_kilos');
     const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
     const r1 = opCompleja.resumen1 || {};
     const granoLbl = {soja:'soja',maiz:'maíz',trigo:'trigo',cebada:'cebada',girasol:'girasol'};
-    // El resumen lo arma el CÓDIGO (no usamos obj.mensaje para evitar que Liza nombre mal el grano)
+    const granoPaso2 = opCompleja.grano2 || (document.getElementById('grano')?.value);
     let msg = 'Resumen de la operación completa:\n';
     if(r1.tn){
       msg += '· Paso 1: ' + r1.tn + ' tn de ' + (granoLbl[r1.grano]||r1.grano||'soja')
@@ -3791,6 +3901,8 @@ function procesarRespuesta(texto){
       }
       const saldo = opComplejaCalcularSaldo(aporteARS, tc);
       opCompleja.aporte1 = aporteARS;
+      opCompleja.tcComprador = (typeof pv==='function') ? pv('tc') : tc;
+      opCompleja.tcVendedor = (typeof pv==='function') ? pv('tc_vendedor') : tc;
       opCompleja.resumen1 = {
         grano: (document.getElementById('grano')?.value)||'',
         tn: gv('res_kilos'),
