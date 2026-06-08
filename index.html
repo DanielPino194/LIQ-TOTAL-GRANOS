@@ -3393,7 +3393,7 @@ async function llamarGemini(texto){
     + '\n- Bruto liquidacion: ' + resNetoTotal
     + '\n- Total gastos de recibo (c/IVA): ' + resGastos
     + (resGastosFlete ? '\n- Flete corto: total ' + resGastosFlete + (detFleteCorto?' (detalle: '+detFleteCorto+')':'') : '')
-    + (resGastosFlLargo ? '\n- Flete largo/directo: total ' + resGastosFlLargo + (detFleteLargo?' (detalle, incluye el $/tn ya calculado: '+detFleteLargo+')':'') : '')
+    + (resGastosFlLargo ? '\n- ' + (typeof fleteLargoTipo!=='undefined' && fleteLargoTipo==='directo' ? 'Flete directo' : 'Flete largo') + ' (ESTE es el único flete de salida/puerto de la operación, NO hay otro): total ' + resGastosFlLargo + (detFleteLargo?' (detalle, incluye el $/tn ya calculado: '+detFleteLargo+')':'') : '')
     + '\n- Total deducciones: ' + resDedTotal
     + '\n- Total retenciones: ' + resRetTotal
     + '\n- Total descontado (gastos+deuda): ' + resGastosNeg
@@ -3701,8 +3701,68 @@ function procesarRespuesta(texto){
     agregarMensaje(obj.mensaje || 'Listo, borré todo. Contame la nueva operación.', 'bot');
     return;
   }
+  // Aplica al formulario todos los campos "básicos" de carga que vengan en c.
+  // Se usa en dos lugares: junto al buscar_web (antes de salir a buscar) y en el flujo
+  // normal de abajo. NO dispara calcular() ni mostrar_resultado: eso lo decide quien la llama.
+  function aplicarCamposBasicos(c){
+    if(c.modo && typeof setModo==='function') setModo(c.modo);
+    if(c.dest && typeof setDest==='function') setDest(c.dest);
+    if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} marcarCargado('grano'); }
+    if(c.precio!==undefined){
+      setInputVal('precio',c.precio);
+      marcarCargado('precio');
+      // Ajustar el toggle de moneda del precio (usd/ars) si hace falta
+      if(c.precio_moneda){
+        const btn=document.getElementById('precio_curr');
+        if(btn && btn.dataset.curr!==c.precio_moneda && typeof toggleCurr==='function'){
+          toggleCurr('precio');
+        }
+      }
+    }
+    if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); marcarCargado('k_total'); }
+    if(c.tc!==undefined){ setInputVal('tc',c.tc); marcarCargado('tc'); }
+    if(c.tc_vendedor!==undefined){ setInputVal('tc_vendedor',c.tc_vendedor); marcarCargado('tc','tc_vendedor'); }
+    if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
+    if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
+    if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
+    if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
+    if(c.factor!==undefined){ setInputVal('factor',c.factor); marcarCargado('factor'); }
+    if(c.com!==undefined){ setInputVal('com',c.com); marcarCargado('com'); }
+    if(c.g_paritarias!==undefined) setInputVal('g_paritarias',c.g_paritarias);
+    if(c.g_secada!==undefined) setInputVal('g_secada',c.g_secada);
+    if(c.g_fumigada!==undefined) setInputVal('g_fumigada',c.g_fumigada);
+    if(c.puntos_libres!==undefined) setInputVal('puntos_libres',c.puntos_libres);
+    if(c.hum_recibo!==undefined) setInputVal('hum_recibo',c.hum_recibo);
+    // Fletes con moneda y tipo
+    if(c.flete_corto!==undefined){
+      if(typeof setFleteModo==='function') setFleteModo('corto','tarifa');
+      setFleteCampo('g_flete_corto', c.flete_corto, c.flete_corto_moneda);
+    }
+    if(c.flete_largo!==undefined){
+      if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+      if(typeof setFleteModo==='function') setFleteModo('salida','tarifa');
+      setFleteCampo('g_flete_largo', c.flete_largo, c.flete_largo_moneda);
+    }
+    // Fletes por KM
+    if(c.flete_corto_km!==undefined){
+      if(typeof setFleteModo==='function') setFleteModo('corto','km');
+      setInputVal('g_flete_corto_km', c.flete_corto_km);
+      if(c.flete_corto_aj!==undefined) setInputVal('g_flete_corto_aj', c.flete_corto_aj);
+    }
+    if(c.flete_largo_km!==undefined){
+      if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+      if(typeof setFleteModo==='function') setFleteModo('salida','km');
+      setInputVal('g_flete_largo_km', c.flete_largo_km);
+      if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
+    }
+  }
+
   // Si Gemini pidió buscar un dato en la web, lo hacemos y reinyectamos el resultado
   if(c.buscar_web){
+    // IMPORTANTE: si en el mismo mensaje vinieron otros datos (grano, precio, tn, flete...),
+    // los aplicamos AHORA, antes de salir a buscar. Si no, el return de abajo los descartaría
+    // y la operación quedaría vacía cuando vuelva la búsqueda.
+    aplicarCamposBasicos(c);
     agregarMensaje(obj.mensaje || 'Buscando el dato actualizado...', 'bot');
     const loading = document.createElement('div');
     loading.className='gem-loading';
@@ -3824,56 +3884,7 @@ function procesarRespuesta(texto){
     return;
   }
 
-  if(c.modo && typeof setModo==='function') setModo(c.modo);
-  if(c.dest && typeof setDest==='function') setDest(c.dest);
-  if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} marcarCargado('grano'); }
-  if(c.precio!==undefined){
-    setInputVal('precio',c.precio);
-    marcarCargado('precio');
-    // Ajustar el toggle de moneda del precio (usd/ars) si hace falta
-    if(c.precio_moneda){
-      const btn=document.getElementById('precio_curr');
-      if(btn && btn.dataset.curr!==c.precio_moneda && typeof toggleCurr==='function'){
-        toggleCurr('precio');
-      }
-    }
-  }
-  if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); marcarCargado('k_total'); }
-  if(c.tc!==undefined){ setInputVal('tc',c.tc); marcarCargado('tc'); }
-  if(c.tc_vendedor!==undefined){ setInputVal('tc_vendedor',c.tc_vendedor); marcarCargado('tc','tc_vendedor'); }
-  if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
-  if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
-  if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
-  if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
-  if(c.factor!==undefined){ setInputVal('factor',c.factor); marcarCargado('factor'); }
-  if(c.com!==undefined){ setInputVal('com',c.com); marcarCargado('com'); }
-  if(c.g_paritarias!==undefined) setInputVal('g_paritarias',c.g_paritarias);
-  if(c.g_secada!==undefined) setInputVal('g_secada',c.g_secada);
-  if(c.g_fumigada!==undefined) setInputVal('g_fumigada',c.g_fumigada);
-  if(c.puntos_libres!==undefined) setInputVal('puntos_libres',c.puntos_libres);
-  if(c.hum_recibo!==undefined) setInputVal('hum_recibo',c.hum_recibo);
-  // Fletes con moneda y tipo
-  if(c.flete_corto!==undefined){
-    if(typeof setFleteModo==='function') setFleteModo('corto','tarifa');
-    setFleteCampo('g_flete_corto', c.flete_corto, c.flete_corto_moneda);
-  }
-  if(c.flete_largo!==undefined){
-    if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
-    if(typeof setFleteModo==='function') setFleteModo('salida','tarifa');
-    setFleteCampo('g_flete_largo', c.flete_largo, c.flete_largo_moneda);
-  }
-  // Fletes por KM
-  if(c.flete_corto_km!==undefined){
-    if(typeof setFleteModo==='function') setFleteModo('corto','km');
-    setInputVal('g_flete_corto_km', c.flete_corto_km);
-    if(c.flete_corto_aj!==undefined) setInputVal('g_flete_corto_aj', c.flete_corto_aj);
-  }
-  if(c.flete_largo_km!==undefined){
-    if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
-    if(typeof setFleteModo==='function') setFleteModo('salida','km');
-    setInputVal('g_flete_largo_km', c.flete_largo_km);
-    if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
-  }
+  aplicarCamposBasicos(c);
   if(typeof calcular==='function') calcular();
 
   // Campos que afectan el resultado: si Liza cambió alguno, el mensaje que armó
