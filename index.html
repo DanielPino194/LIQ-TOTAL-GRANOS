@@ -3536,9 +3536,9 @@ PASO 2 — ELECCIÓN + SEGUNDO GRANO:
 <buscar_web>
 Si el usuario pide un dato que cambia a diario (dólar BNA, pizarra), mandá "buscar_web": "la consulta".
 Mensaje: "Dame un segundo que lo busco."
-Para el dólar del BNA: buscá SIEMPRE el DÓLAR DIVISA (no el billete). Consulta: "dólar divisa Banco Nación Argentina compra venta hoy (no billete)".
-Con el resultado: cargá compra en "tc", venta en "tc_vendedor". Confirmá valores y fecha: "Cargué el divisa del BNA: compra X, venta Y, del [fecha]. ¿Te sirve?"
-Si solo encontraste el billete, avisá que no es el divisa.
+Para el dólar del BNA: buscá SIEMPRE el DÓLAR DIVISA (no el billete). Consulta: "dólar divisa Banco Nación Argentina compra venta (no billete)".
+El sistema carga compra en "tc" y venta en "tc_vendedor" SOLO si confirma que es el divisa. Confirmá valores y fecha: "Cargué el divisa del BNA: compra X, venta Y, del [fecha]. ¿Te sirve?"
+Si el sistema no pudo confirmar el divisa (o solo halló el billete), avisá que no es el divisa y ofrecé cargar un valor a mano.
 </buscar_web>
 
 <generar_pdf>
@@ -3553,6 +3553,7 @@ SOLO si el usuario dice EXPLÍCITO "borrá todo", "empecemos de nuevo", "nueva o
 <flete>
 Tipos: "flete corto" (campo→planta, flete_corto_km), "flete largo" o "flete directo" (campo→puerto, flete_largo_km). Ajuste negativo = descuento: "menos 10%" → flete_largo_aj: -10. Ajuste positivo = recargo. Tipo "directo" → flete_largo_tipo: "directo".
 Ejemplo: "flete directo 350 km menos 15%" → flete_largo_km: 350, flete_largo_tipo: "directo", flete_largo_aj: -15.
+KM POR LOCALIDADES: si el usuario da dos lugares en vez del kilometraje (ej: "el campo está en Pergamino y la planta en Rosario", "de Pergamino al puerto de Rosario"), mandá "buscar_web": "distancia en km por ruta de [origen] a [destino] en camión". El sistema carga los km en el campo de flete que corresponda (corto→planta, largo→puerto/directo) y te devuelve el dato para que lo confirmes. No inventes los km vos.
 </flete>
 
 <estado_actual>
@@ -3613,11 +3614,14 @@ Siempre confirmás el dato anterior y preguntás lo siguiente en una sola respue
 
 // Busca un dato en tiempo real usando Gemini + Google Search (llamada SEPARADA, sin JSON)
 async function buscarDatoWeb(consulta){
-  const sys = 'Sos un asistente que busca datos financieros en tiempo real en Argentina. Respondé BREVE y directo: solo el dato pedido, con la fuente y la fecha exacta del dato.\n'
+  const hoy = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const sys = 'Sos un asistente que busca datos en tiempo real en Argentina. La fecha de HOY es ' + hoy + '. Respondé BREVE y directo: solo el dato pedido, con la fuente y la fecha exacta del dato.\n'
+    + 'REGLA DE VIGENCIA: devolvé ÚNICAMENTE el dato MÁS RECIENTE disponible. Si la fuente que encontrás es de una fecha anterior a hoy, aclará explícitamente de qué fecha es y advertí que puede estar desactualizado. NUNCA devuelvas un dato viejo como si fuera el de hoy.\n'
     + 'MUY IMPORTANTE sobre tipos de cambio del Banco Nación (BNA):\n'
     + '- El Banco Nación publica DOS cotizaciones distintas: el dólar BILLETE (efectivo, para personas) y el dólar DIVISA (transferencias/comercio exterior, suele ser un poco más bajo). NO son lo mismo.\n'
-    + '- Si te piden el DIVISA, devolvé SOLO el dólar divisa del BNA (compra y venta), nunca el billete. Si solo encontrás el billete, aclaralo y decí que no encontraste el divisa.\n'
-    + '- Dá siempre la fecha del dato (por ejemplo "al cierre del viernes 5 de junio") y la compra y la venta por separado, en pesos.\n'
+    + '- Si te piden el DIVISA, devolvé SOLO el dólar divisa del BNA (compra y venta), nunca el billete. Usá SIEMPRE la palabra "divisa" en tu respuesta cuando devuelvas el divisa. Si solo encontrás el billete, escribí EXPLÍCITAMENTE "no encontré el divisa, solo el billete" y NO des el billete como si fuera divisa.\n'
+    + '- Dá siempre la fecha exacta del dato y la compra y la venta por separado, en pesos.\n'
+    + 'Para distancias entre localidades: devolvé los KILÓMETROS por ruta para camión/auto (el número de km), indicando origen y destino. Si hay varias rutas, dá la principal.\n'
     + 'No inventes: si no encontrás el dato exacto que piden, decilo claramente.';
   try{
     const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
@@ -3625,7 +3629,7 @@ async function buscarDatoWeb(consulta){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         systemInstruction:{parts:[{text:sys}]},
-        contents:[{role:'user', parts:[{text:consulta}]}],
+        contents:[{role:'user', parts:[{text:consulta + ' (al día de hoy, ' + hoy + ')'}]}],
         tools:[{google_search:{}}],
         generationConfig:{ temperature:0 }
       })
@@ -3708,8 +3712,34 @@ function procesarRespuesta(texto){
     scrollMsgs();
     buscarDatoWeb(c.buscar_web).then(resultado=>{
       document.getElementById('gem-loading-web')?.remove();
-      // Reinyectar el resultado como contexto y pedir a Gemini que lo use
-      const aviso = 'Resultado de la busqueda web para "'+c.buscar_web+'": '+resultado+'. Usá este dato para continuar. Si es un tipo de cambio del Banco Nación, usá SOLO el dólar DIVISA (no el billete): cargá la compra en tc y la venta en tc_vendedor, y confirmale al usuario los valores y la fecha. Si el resultado solo trae el billete, avisale que no encontraste el divisa y preguntale si quiere cargar otro valor.';
+      // ¿Qué tipo de búsqueda fue? Lo deducimos de la consulta que pidió Liza.
+      const q = (c.buscar_web||'').toLowerCase();
+      const esKm = /\bkm\b|kil[oó]metro|distancia|ruta/.test(q);
+      const esTC = /d[oó]lar|divisa|billete|tipo de cambio|bna|naci[oó]n/.test(q);
+      let aviso;
+      if(esKm){
+        // BÚSQUEDA DE DISTANCIA PARA FLETE
+        aviso = 'Resultado de la búsqueda web de distancia para "'+c.buscar_web+'": '+resultado+'. '
+          + 'Extraé el número de KILÓMETROS por ruta. Cargalo en flete_corto_km si el flete es campo→planta, '
+          + 'o en flete_largo_km si es campo→puerto/directo. Confirmale al usuario: "Son unos X km por ruta. ¿Te sirve o lo ajustás?". '
+          + 'NO inventes el número: si el resultado no trae una distancia clara, decí que no la encontraste y pedí que la cargue a mano.';
+      } else if(esTC){
+        // BÚSQUEDA DE TIPO DE CAMBIO BNA
+        const mencionaDivisa = /divisa/i.test(resultado);
+        if(mencionaDivisa){
+          aviso = 'Resultado de la búsqueda web para "'+c.buscar_web+'": '+resultado+'. '
+            + 'Es el dólar DIVISA del Banco Nación: cargá la compra en tc y la venta en tc_vendedor. '
+            + 'Confirmale al usuario los valores Y LA FECHA del dato. Si la fecha no es de hoy, avisale que puede estar desactualizado y preguntale si lo carga igual.';
+        } else {
+          // El resultado NO menciona divisa → no cargar nada, evitar confundir con billete
+          aviso = 'Resultado de la búsqueda web para "'+c.buscar_web+'": '+resultado+'. '
+            + 'ATENCIÓN: este resultado NO confirma que sea el dólar DIVISA (puede ser el billete u otro). '
+            + 'NO cargues ningún valor en tc ni tc_vendedor. Avisale al usuario que no pudiste confirmar el divisa del BNA '
+            + 'y preguntale si quiere que cargues un tipo de cambio a mano.';
+        }
+      } else {
+        aviso = 'Resultado de la búsqueda web para "'+c.buscar_web+'": '+resultado+'. Usá este dato para continuar y confirmale al usuario el valor y la fecha.';
+      }
       gemSend(aviso, true);
     });
     return;
