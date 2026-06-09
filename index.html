@@ -4162,6 +4162,41 @@ function procesarRespuesta(texto){
     // si todavía no hay TC, no mostramos saldo: el mensaje de Liza pide el TC y listo
   }
 
+  // CORRECCIÓN EN PASO 1: si el saldo YA se mostró y el usuario corrige un dato de
+  // cálculo (precio, tc, factor, comisión, recibo, flete...), el aporte guardado quedó
+  // viejo. Recalculamos aporte y saldo, actualizamos resumen1, y avisamos el nuevo valor.
+  if(opCompleja && opCompleja.activa && opCompleja.paso===1 && opCompleja.saldoMostrado
+     && !opCompleja.cubrir2 && huboCambioCalculo && window._lastCalc){
+    const tc = window._lastCalc.tc || (typeof pv==='function' ? pv('tc') : 0);
+    const lc = window._lastCalc;
+    let aporteARS = 0;
+    if(typeof liq==='function' && typeof pv==='function'){
+      const tnTotal = pv('k_total')||0;
+      const r = liq(tnTotal, 'pago', lc.p);
+      const plus = lc.plusARStn>0 ? tnTotal*lc.plusARStn : tnTotal*lc.plusUSD*tc;
+      aporteARS = (r.tp||0) + plus;
+    }
+    const saldo = opComplejaCalcularSaldo(aporteARS, tc);
+    opCompleja.aporte1 = aporteARS;
+    opCompleja.tcComprador = (typeof pv==='function') ? pv('tc') : tc;
+    opCompleja.tcVendedor = (typeof pv==='function') ? pv('tc_vendedor') : tc;
+    if(opCompleja.resumen1){
+      opCompleja.resumen1.aporte = aporteARS;
+      opCompleja.resumen1.tn = gv('res_kilos');
+      opCompleja.resumen1.grano = (document.getElementById('grano')?.value)||opCompleja.resumen1.grano;
+    }
+    if(saldo){
+      const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+      const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+      const g1 = granoLbl[(document.getElementById('grano')?.value)] || 'el primer grano';
+      let m2 = 'Actualicé el dato. Ahora ' + g1 + ' aporta ' + fmt(aporteARS) + ', y queda un saldo de '
+             + fmt(saldo.deudaARS) + ' de deuda';
+      if(saldo.cobroARS>0) m2 += ' y ' + fmt(saldo.cobroARS) + ' a cobrar';
+      m2 += '. Seguimos con el segundo grano cuando quieras.';
+      msg = m2;
+    }
+  }
+
   agregarMensaje(msg,'bot');
   // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
   if(c.generar_pdf){
