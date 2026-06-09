@@ -3638,7 +3638,7 @@ const BUSQUEDA_WEB = {
       if(typeof MAPS_KEY!=='string' || !MAPS_KEY || MAPS_KEY.indexOf('__')===0){
         reject(new Error('sin key de Maps')); return;
       }
-      if(window.google && window.google.maps && window.google.maps.DistanceMatrixService){
+      if(window.google && window.google.maps && window.google.maps.DirectionsService){
         resolve(window.google.maps); return;
       }
       // Callback global que Google invoca cuando la librería terminó de cargar.
@@ -3669,24 +3669,33 @@ const BUSQUEDA_WEB = {
   },
 
   // Calcula la distancia por ruta (en km) entre dos localidades argentinas con el
-  // DistanceMatrixService de Maps (estable y soportado). Devuelve {km, origen, destino}.
+  // DirectionsService de Maps (parte del core de la API de JavaScript para mapas,
+  // que la key ya tiene permitida). Pide rutas alternativas y elige la MÁS CORTA,
+  // para coincidir con la que se ve en la app de Google Maps.
   distanciaMaps(origen, destino){
     return this.cargarMaps().then(maps=>new Promise((resolve, reject)=>{
       // Siempre Argentina: se lo agregamos para evitar homónimos de otros países.
       const o = origen + ', Argentina', d = destino + ', Argentina';
-      const svc = new maps.DistanceMatrixService();
-      svc.getDistanceMatrix({
-        origins: [o],
-        destinations: [d],
+      const svc = new maps.DirectionsService();
+      svc.route({
+        origin: o,
+        destination: d,
         travelMode: maps.TravelMode.DRIVING,
+        provideRouteAlternatives: true,
         unitSystem: maps.UnitSystem.METRIC
       }, (resp, status)=>{
         if(status!=='OK'){ reject(new Error('estado '+status)); return; }
-        const el = resp && resp.rows && resp.rows[0] && resp.rows[0].elements && resp.rows[0].elements[0];
-        if(!el || el.status!=='OK' || !el.distance || !(el.distance.value>0)){
-          reject(new Error('sin ruta ('+(el?el.status:'sin elemento')+')')); return;
-        }
-        resolve({ km: Math.round(el.distance.value/1000), origen, destino });
+        const rutas = resp && resp.routes;
+        if(!rutas || !rutas.length){ reject(new Error('sin rutas')); return; }
+        // Sumar los metros de cada ruta (puede tener varios tramos) y quedarse con la más corta.
+        let mejorMetros = Infinity;
+        rutas.forEach(r=>{
+          let metros = 0;
+          (r.legs||[]).forEach(leg=>{ metros += (leg.distance && leg.distance.value) || 0; });
+          if(metros>0 && metros<mejorMetros) mejorMetros = metros;
+        });
+        if(!(mejorMetros<Infinity) || !(mejorMetros>0)){ reject(new Error('sin distancia')); return; }
+        resolve({ km: Math.round(mejorMetros/1000), origen, destino });
       });
     }));
   },
