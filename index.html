@@ -3712,9 +3712,10 @@ const BUSQUEDA_WEB = {
       + 'COTIZACIONES — REGLA DE VIGENCIA: devolvé ÚNICAMENTE el dato MÁS RECIENTE disponible. Si la fuente es de una fecha anterior, aclará de qué fecha es. NUNCA des un dato viejo como si fuera el de hoy.\n'
       + 'COTIZACIONES — HORARIO del BNA: el Banco Nación actualiza el dólar divisa alrededor de las 15 hs de cada día hábil. ' + reglaHorario + '\n'
       + 'COTIZACIONES — dólar del Banco Nación (BNA):\n'
-      + '- El BNA publica DOS cotizaciones en su web (bna.com.ar), en solapas distintas: el dólar BILLETE (efectivo, mostrador) y el dólar DIVISA (transferencias/comercio exterior). NO son lo mismo.\n'
-      + '- CÓMO DISTINGUIRLOS: el DIVISA tiene la BRECHA entre compra y venta MÁS CHICA (compra y venta cercanas, pocos pesos de diferencia). El BILLETE tiene la brecha MÁS GRANDE (compra y venta más separadas). Si ves dos pares de números, el divisa es el de menor diferencia compra/venta.\n'
-      + '- Te piden el DIVISA: devolvé SOLO el divisa (compra y venta), NUNCA el billete. Usá SIEMPRE la palabra "divisa" en tu respuesta. Decí explícitamente cuál es la compra y cuál la venta, en pesos, y la fecha del dato.\n'
+      + '- El BNA publica DOS cotizaciones en su web (bna.com.ar), en solapas distintas: el dólar BILLETE (efectivo, mostrador) y el dólar DIVISA (transferencias/comercio exterior, referenciado al MERCADO MAYORISTA). NO son lo mismo.\n'
+      + '- FUENTE: buscá la cotización de la fila "Dólar U.S.A" en la tabla DIVISA / Mayorista del Banco Nación (sección Cotizador/Monedas Histórico de bna.com.ar). Si esa tabla no está legible, usá portales que separan limpio Billete vs Divisa: Ámbito Financiero, El Cronista (sección divisas), Errepar o Infobae. NO uses fuentes de dólar minorista/billete.\n'
+      + '- CÓMO DISTINGUIRLOS: el DIVISA tiene la BRECHA entre compra y venta MÁS CHICA (compra y venta cercanas, pocos pesos de diferencia, y suele coincidir con el dólar mayorista). El BILLETE tiene la brecha MÁS GRANDE (compra y venta más separadas, decenas de pesos). Si ves dos pares de números, el divisa es el de menor diferencia compra/venta.\n'
+      + '- Te piden el DIVISA: devolvé SOLO el divisa (compra y venta), NUNCA el billete. Usá SIEMPRE la palabra "divisa" en tu respuesta. Estructurá así: "Dólar Divisa BNA (mayorista) [fecha]: compra $X, venta $Y".\n'
       + '- Si no podés distinguir con seguridad cuál es el divisa, decilo claramente en vez de arriesgar el billete.\n'
       + 'DISTANCIAS entre localidades argentinas:\n'
       + '- Devolvé los KILÓMETROS por RUTA (camino real para auto/camión), NO la distancia en línea recta.\n'
@@ -3728,7 +3729,7 @@ const BUSQUEDA_WEB = {
   // (una distancia no depende del día; agregarle la fecha confunde la búsqueda).
   prepararConsulta(consulta, tipo, hoy){
     if(tipo==='km') return consulta + ' (distancia por ruta en auto/camión, en kilómetros)';
-    if(tipo==='tc') return consulta + ' (dólar DIVISA del Banco Nación bna.com.ar, compra y venta de hoy ' + hoy + '; el divisa es el de menor brecha entre compra y venta, no el billete)';
+    if(tipo==='tc') return consulta + ' (cotización dólar DIVISA del Banco Nación, fila "Dólar U.S.A" tabla Divisa/Mayorista, compra y venta del ' + hoy + '; NO el billete; el divisa tiene la brecha más chica entre compra y venta)';
     return consulta;
   },
 
@@ -3742,16 +3743,36 @@ const BUSQUEDA_WEB = {
         + 'Si el resultado trae un número aproximado, usalo igual y aclará que es aproximado. Solo decí que no lo encontraste si de verdad no hay ningún número.';
     }
     if(tipo==='tc'){
-      if(/divisa/i.test(resultado)){
+      // Validación en código: extraer los números del resultado y mirar la brecha.
+      // El divisa tiene brecha chica (~pocos pesos); el billete brecha grande (decenas).
+      // Si la brecha es grande, probablemente sea billete aunque el texto diga "divisa".
+      const nums = (resultado.match(/\d[\d.,]*\d|\d/g) || [])
+        .map(s=>{
+          // Formato es-AR (1.437,50): punto = miles, coma = decimal.
+          if(s.indexOf(',')>=0) return parseFloat(s.replace(/\./g,'').replace(',','.'));
+          // Sin coma: un punto con 1-2 decimales es decimal (1437.50); si no, quitar puntos de miles.
+          if(/^\d+\.\d{1,2}$/.test(s)) return parseFloat(s);
+          return parseFloat(s.replace(/\./g,''));
+        })
+        .filter(n=>!isNaN(n) && n>500 && n<100000 && !(n>=2000 && n<=2099 && Number.isInteger(n)));
+      let brechaSospechosa = false;
+      if(nums.length>=2){
+        const ordenados = [...new Set(nums)].sort((a,b)=>a-b);
+        const min = ordenados[0], max = ordenados[ordenados.length-1];
+        // brecha relativa: si el rango entre el menor y el mayor supera ~2%, huele a billete
+        if((max-min)/min > 0.02) brechaSospechosa = true;
+      }
+      if(/divisa/i.test(resultado) && !brechaSospechosa){
         return 'Resultado de la búsqueda web para "'+consulta+'": '+resultado+'. '
           + 'Es el dólar DIVISA del Banco Nación. Si el resultado muestra dos pares de números (billete y divisa), el DIVISA es el de MENOR brecha entre compra y venta. '
           + 'Cargá la compra del divisa en tc y la venta del divisa en tc_vendedor. '
           + 'Confirmale al usuario los valores Y LA FECHA del dato. Si la fecha no es la de hoy (o todavía no son las 15 hs y es el cierre de ayer), avisale de qué día es y preguntale si lo carga igual.';
       }
+      // O no dice "divisa", o la brecha es grande (sospecha de billete): pedir cautela.
       return 'Resultado de la búsqueda web para "'+consulta+'": '+resultado+'. '
-        + 'ATENCIÓN: este resultado NO confirma claramente que sea el dólar DIVISA (puede ser el billete). '
-        + 'Recordá: el divisa es el par con MENOR diferencia entre compra y venta. Si podés identificarlo así en el resultado, usalo y aclará que es el divisa. '
-        + 'Si no, NO cargues nada en tc ni tc_vendedor: avisale al usuario que no pudiste confirmar el divisa del BNA y preguntale si carga el tipo de cambio a mano.';
+        + 'ATENCIÓN: no está confirmado que estos valores sean el dólar DIVISA; la brecha entre compra y venta parece grande (típica del BILLETE, no del divisa, que tiene compra y venta muy cercanas). '
+        + 'Si en el resultado hay un par de números con brecha CHICA (pocos pesos de diferencia), ese es el divisa: usá ese y aclaralo. '
+        + 'Si solo hay valores con brecha grande, NO los cargues como divisa: mostrale al usuario los valores que encontraste, aclarale que parecen el billete, y preguntale si te pasa el divisa a mano.';
     }
     return 'Resultado de la búsqueda web para "'+consulta+'": '+resultado+'. Usá este dato para continuar y confirmale al usuario el valor y la fecha.';
   }
