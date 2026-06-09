@@ -3658,12 +3658,14 @@ const BUSQUEDA_WEB = {
   // Devuelve {origen, destino} o null si no logra separarlos.
   parsearOrigenDestino(consulta){
     const q = (consulta||'').toLowerCase()
-      .replace(/\b(dist(ancia)?|km|kil[oó]metros?|por ruta|en auto|en cami[oó]n|cu[aá]nto hay|tengo que|buscar|bucar|busca)\b/g,' ')
+      .replace(/\b(dist(ancia)?|km|kil[oó]metros?|por ruta|en auto|en cami[oó]n|cu[aá]ntos?|hay|tengo que|buscar|bucar|busca|flete|directo|largo|corto|tarifa)\b/g,' ')
       .replace(/\s+/g,' ').trim();
     // patrón "X a Y" o "de X a Y"
     const m = q.match(/(?:de\s+)?(.+?)\s+a\s+(.+)/);
     if(!m) return null;
-    const origen = m[1].trim(), destino = m[2].trim();
+    const origen = m[1].trim();
+    // El destino puede arrastrar la cola del ajuste ("... menos el 10%"): la sacamos.
+    let destino = m[2].replace(/\b(menos|m[aá]s|mas)\b.*$/,'').replace(/\d+\s*%.*$/,'').replace(/\s+/g,' ').trim();
     if(!origen || !destino) return null;
     return { origen, destino };
   },
@@ -3924,14 +3926,18 @@ function procesarRespuesta(texto){
     if(c.flete_corto_km!==undefined){
       if(typeof setFleteModo==='function') setFleteModo('corto','km');
       setInputVal('g_flete_corto_km', c.flete_corto_km);
-      if(c.flete_corto_aj!==undefined) setInputVal('g_flete_corto_aj', c.flete_corto_aj);
     }
     if(c.flete_largo_km!==undefined){
       if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
       if(typeof setFleteModo==='function') setFleteModo('salida','km');
       setInputVal('g_flete_largo_km', c.flete_largo_km);
-      if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
     }
+    // Ajustes (descuento/recargo) del flete: se aplican SIEMPRE que vengan, aunque
+    // no vengan los km en el mismo turno (ej: "el flete menos 10%" suelto, o cuando
+    // los km los trae Google Maps en un paso aparte). Antes esto estaba atado a que
+    // vinieran los km y el descuento se perdía.
+    if(c.flete_corto_aj!==undefined) setInputVal('g_flete_corto_aj', c.flete_corto_aj);
+    if(c.flete_largo_aj!==undefined) setInputVal('g_flete_largo_aj', c.flete_largo_aj);
   }
 
   // Si Gemini pidió buscar un dato en la web, lo hacemos y reinyectamos el resultado
