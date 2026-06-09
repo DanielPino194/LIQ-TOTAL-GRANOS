@@ -3629,9 +3629,8 @@ const BUSQUEDA_WEB = {
   },
 
   // ── GOOGLE MAPS (distancia exacta) ──────────────────────────────────────
-  // Carga la librería de Maps JavaScript una sola vez, on-demand (solo cuando
-  // se necesita la primera distancia). Devuelve una promesa que resuelve cuando
-  // google.maps está listo. Si no hay key o falla, rechaza (y se usa el fallback).
+  // Carga la librería de Maps JavaScript una sola vez, on-demand. Usa el callback
+  // oficial de Google para saber con certeza cuándo está lista (más fiable que onload).
   _mapsPromise: null,
   cargarMaps(){
     if(this._mapsPromise) return this._mapsPromise;
@@ -3639,12 +3638,17 @@ const BUSQUEDA_WEB = {
       if(typeof MAPS_KEY!=='string' || !MAPS_KEY || MAPS_KEY.indexOf('__')===0){
         reject(new Error('sin key de Maps')); return;
       }
-      if(window.google && window.google.maps){ resolve(window.google.maps); return; }
+      if(window.google && window.google.maps && window.google.maps.DistanceMatrixService){
+        resolve(window.google.maps); return;
+      }
+      // Callback global que Google invoca cuando la librería terminó de cargar.
+      window.__initMapsLiza = ()=>{
+        (window.google && window.google.maps) ? resolve(window.google.maps) : reject(new Error('Maps no inicializó'));
+      };
       const s = document.createElement('script');
-      s.src = 'https://maps.googleapis.com/maps/api/js?key='+MAPS_KEY+'&libraries=routes&v=weekly';
+      s.src = 'https://maps.googleapis.com/maps/api/js?key='+MAPS_KEY+'&loading=async&callback=__initMapsLiza';
       s.async = true;
-      s.onload = ()=>{ (window.google && window.google.maps) ? resolve(window.google.maps) : reject(new Error('Maps no cargó')); };
-      s.onerror = ()=>reject(new Error('error cargando Maps'));
+      s.onerror = ()=>reject(new Error('error cargando script de Maps'));
       document.head.appendChild(s);
     });
     return this._mapsPromise;
@@ -3664,23 +3668,27 @@ const BUSQUEDA_WEB = {
     return { origen, destino };
   },
 
-  // Calcula la distancia por ruta (en km) entre dos localidades argentinas usando
-  // el RouteMatrix de Google Maps. Devuelve {km, origen, destino} o lanza error.
-  async distanciaMaps(origen, destino){
-    const maps = await this.cargarMaps();
-    const { RouteMatrix } = await maps.importLibrary('routes');
-    // Siempre Argentina: se lo agregamos para evitar homónimos de otros países.
-    const o = origen + ', Argentina', d = destino + ', Argentina';
-    const { matrix } = await RouteMatrix.compute({
-      origins: [{ waypoint: { address: o } }],
-      destinations: [{ waypoint: { address: d } }],
-      travelMode: 'DRIVING',
-      units: maps.UnitSystem.METRIC,
-      fields: ['distanceMeters','condition']
-    });
-    const item = matrix && matrix.rows && matrix.rows[0] && matrix.rows[0].items && matrix.rows[0].items[0];
-    if(!item || item.condition!=='ROUTE_EXISTS' || !(item.distanceMeters>0)) throw new Error('sin ruta');
-    return { km: Math.round(item.distanceMeters/1000), origen, destino };
+  // Calcula la distancia por ruta (en km) entre dos localidades argentinas con el
+  // DistanceMatrixService de Maps (estable y soportado). Devuelve {km, origen, destino}.
+  distanciaMaps(origen, destino){
+    return this.cargarMaps().then(maps=>new Promise((resolve, reject)=>{
+      // Siempre Argentina: se lo agregamos para evitar homónimos de otros países.
+      const o = origen + ', Argentina', d = destino + ', Argentina';
+      const svc = new maps.DistanceMatrixService();
+      svc.getDistanceMatrix({
+        origins: [o],
+        destinations: [d],
+        travelMode: maps.TravelMode.DRIVING,
+        unitSystem: maps.UnitSystem.METRIC
+      }, (resp, status)=>{
+        if(status!=='OK'){ reject(new Error('estado '+status)); return; }
+        const el = resp && resp.rows && resp.rows[0] && resp.rows[0].elements && resp.rows[0].elements[0];
+        if(!el || el.status!=='OK' || !el.distance || !(el.distance.value>0)){
+          reject(new Error('sin ruta ('+(el?el.status:'sin elemento')+')')); return;
+        }
+        resolve({ km: Math.round(el.distance.value/1000), origen, destino });
+      });
+    }));
   },
 
   // Arma el systemInstruction. El encabezado es neutro (no sesga a lo financiero)
@@ -3926,7 +3934,9 @@ function procesarRespuesta(texto){
             // e incluye la palabra "ruta" y los km para que el ruteo lo cargue bien.
             finalizarBusqueda('Distancia por ruta (Google Maps) de '+r.origen+' a '+r.destino+': '+r.km+' km.');
           })
-          .catch(()=>{
+          .catch((err)=>{
+            // Log de diagnóstico: ver el error real de Maps en la consola.
+            console.log('[Maps] falló, usando fallback Gemini:', err && err.message ? err.message : err);
             // Fallback: Maps no pudo, usamos la estimación de Gemini.
             buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
           });
