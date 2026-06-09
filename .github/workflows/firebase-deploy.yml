@@ -16,6 +16,11 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: sed -i "s|__GEMINI_API_KEY__|${GEMINI_API_KEY}|g" index.html
 
+      - name: Inject Maps API Key
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+        run: sed -i "s|__MAPS_API_KEY__|${MAPS_API_KEY}|g" index.html
+
       - name: Deploy to Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
