@@ -2955,6 +2955,7 @@ if('serviceWorker' in navigator){
 
 <script>
 const GEMINI_KEY = '__GEMINI_API_KEY__';
+const MAPS_KEY = '__MAPS_API_KEY__';
 
 function toggleGemini(){
   const p = document.getElementById('gemini-panel');
@@ -3627,6 +3628,61 @@ const BUSQUEDA_WEB = {
     return 'otro';
   },
 
+  // ── GOOGLE MAPS (distancia exacta) ──────────────────────────────────────
+  // Carga la librería de Maps JavaScript una sola vez, on-demand (solo cuando
+  // se necesita la primera distancia). Devuelve una promesa que resuelve cuando
+  // google.maps está listo. Si no hay key o falla, rechaza (y se usa el fallback).
+  _mapsPromise: null,
+  cargarMaps(){
+    if(this._mapsPromise) return this._mapsPromise;
+    this._mapsPromise = new Promise((resolve, reject)=>{
+      if(typeof MAPS_KEY!=='string' || !MAPS_KEY || MAPS_KEY.indexOf('__')===0){
+        reject(new Error('sin key de Maps')); return;
+      }
+      if(window.google && window.google.maps){ resolve(window.google.maps); return; }
+      const s = document.createElement('script');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key='+MAPS_KEY+'&libraries=routes&v=weekly';
+      s.async = true;
+      s.onload = ()=>{ (window.google && window.google.maps) ? resolve(window.google.maps) : reject(new Error('Maps no cargó')); };
+      s.onerror = ()=>reject(new Error('error cargando Maps'));
+      document.head.appendChild(s);
+    });
+    return this._mapsPromise;
+  },
+
+  // Extrae origen y destino de una consulta tipo "km de Garré a General Deheza".
+  // Devuelve {origen, destino} o null si no logra separarlos.
+  parsearOrigenDestino(consulta){
+    const q = (consulta||'').toLowerCase()
+      .replace(/\b(dist(ancia)?|km|kil[oó]metros?|por ruta|en auto|en cami[oó]n|cu[aá]nto hay|tengo que|buscar|bucar|busca)\b/g,' ')
+      .replace(/\s+/g,' ').trim();
+    // patrón "X a Y" o "de X a Y"
+    const m = q.match(/(?:de\s+)?(.+?)\s+a\s+(.+)/);
+    if(!m) return null;
+    const origen = m[1].trim(), destino = m[2].trim();
+    if(!origen || !destino) return null;
+    return { origen, destino };
+  },
+
+  // Calcula la distancia por ruta (en km) entre dos localidades argentinas usando
+  // el RouteMatrix de Google Maps. Devuelve {km, origen, destino} o lanza error.
+  async distanciaMaps(origen, destino){
+    const maps = await this.cargarMaps();
+    const { RouteMatrix } = await maps.importLibrary('routes');
+    // Siempre Argentina: se lo agregamos para evitar homónimos de otros países.
+    const o = origen + ', Argentina', d = destino + ', Argentina';
+    const { matrix } = await RouteMatrix.compute({
+      origins: [{ waypoint: { address: o } }],
+      destinations: [{ waypoint: { address: d } }],
+      travelMode: 'DRIVING',
+      units: maps.UnitSystem.METRIC,
+      fields: ['distanceMeters','condition']
+    });
+    const item = matrix && matrix.rows && matrix.rows[0] && matrix.rows[0].items && matrix.rows[0].items[0];
+    if(!item || item.condition!=='ROUTE_EXISTS' || !(item.distanceMeters>0)) throw new Error('sin ruta');
+    return { km: Math.round(item.distanceMeters/1000), origen, destino };
+  },
+
   // Arma el systemInstruction. El encabezado es neutro (no sesga a lo financiero)
   // y cada dominio (cambiario / distancias) tiene sus propias reglas claras.
   sysPrompt(hoy, hora){
@@ -3785,7 +3841,10 @@ function procesarRespuesta(texto){
   // Se usa en dos lugares: junto al buscar_web (antes de salir a buscar) y en el flujo
   // normal de abajo. NO dispara calcular() ni mostrar_resultado: eso lo decide quien la llama.
   function aplicarCamposBasicos(c){
-    if(c.modo && typeof setModo==='function') setModo(c.modo);
+    // El modo que reenvía Liza NO debe borrar datos ya cargados (deuda/cobrar/tn).
+    // Por eso va con noClear. El cambio de modo destructivo (que limpia) solo ocurre
+    // cuando el USUARIO toca el botón de modo en la pantalla, no desde un reenvío del modelo.
+    if(c.modo && typeof setModo==='function') setModo(c.modo, {noClear:true});
     if(c.dest && typeof setDest==='function') setDest(c.dest);
     if(c.grano){ const s=document.getElementById('grano'); if(s){s.value=c.grano;s.dispatchEvent(new Event('change'));} marcarCargado('grano'); }
     if(c.precio!==undefined){
@@ -3799,7 +3858,7 @@ function procesarRespuesta(texto){
         }
       }
     }
-    if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); marcarCargado('k_total'); }
+    if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos', {noClear:true}); setInputVal('k_total',c.k_total); marcarCargado('k_total'); }
     if(c.tc!==undefined){ setInputVal('tc',c.tc); marcarCargado('tc'); }
     if(c.tc_vendedor!==undefined){ setInputVal('tc_vendedor',c.tc_vendedor); marcarCargado('tc','tc_vendedor'); }
     if(c.deuda_usd!==undefined) aplicarMontoCritico('deuda_usd', c.deuda_usd);
@@ -3850,11 +3909,32 @@ function procesarRespuesta(texto){
     loading.id='gem-loading-web';
     document.getElementById('gem-msgs').appendChild(loading);
     scrollMsgs();
-    buscarDatoWeb(c.buscar_web).then(resultado=>{
+
+    // Si es una distancia, intentamos PRIMERO Google Maps (número exacto).
+    // Si Maps falla (sin key, sin ruta, error o cupo agotado), caemos a Gemini.
+    const finalizarBusqueda = (resultado)=>{
       document.getElementById('gem-loading-web')?.remove();
       const aviso = BUSQUEDA_WEB.rutearResultado(c.buscar_web, resultado);
       gemSend(aviso, true);
-    });
+    };
+    if(BUSQUEDA_WEB.tipo(c.buscar_web)==='km'){
+      const od = BUSQUEDA_WEB.parsearOrigenDestino(c.buscar_web);
+      if(od){
+        BUSQUEDA_WEB.distanciaMaps(od.origen, od.destino)
+          .then(r=>{
+            // Resultado de Maps en el mismo formato que espera rutearResultado,
+            // e incluye la palabra "ruta" y los km para que el ruteo lo cargue bien.
+            finalizarBusqueda('Distancia por ruta (Google Maps) de '+r.origen+' a '+r.destino+': '+r.km+' km.');
+          })
+          .catch(()=>{
+            // Fallback: Maps no pudo, usamos la estimación de Gemini.
+            buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
+          });
+        return;
+      }
+    }
+    // Resto de casos (TC u otros): Gemini como siempre.
+    buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
     return;
   }
   // ── OPERACIÓN COMPLEJA (máquina de estados en código) ──
