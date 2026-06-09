@@ -3629,13 +3629,20 @@ const BUSQUEDA_WEB = {
 
   // Arma el systemInstruction. El encabezado es neutro (no sesga a lo financiero)
   // y cada dominio (cambiario / distancias) tiene sus propias reglas claras.
-  sysPrompt(hoy){
+  sysPrompt(hoy, hora){
+    const h = (typeof hora==='number') ? hora : new Date().getHours();
+    const yaActualizo = h >= 15;
+    const reglaHorario = yaActualizo
+      ? 'Son más de las 15 hs en Argentina: el BNA YA publicó el divisa de HOY. Devolvé el de hoy; si solo encontrás el de ayer, aclaralo.'
+      : 'Son antes de las 15 hs en Argentina: el BNA todavía NO actualizó el divisa de hoy. El valor vigente es el del CIERRE DE AYER (último día hábil). Devolvé ese y aclará que es el del cierre anterior porque aún no salió el de hoy.';
     return 'Sos un asistente que busca datos en tiempo real en Argentina (cotizaciones y distancias entre localidades). La fecha de HOY es ' + hoy + '. Respondé BREVE y directo: solo el dato pedido, con la fuente y, si aplica, la fecha del dato.\n'
-      + 'COTIZACIONES — REGLA DE VIGENCIA: devolvé ÚNICAMENTE el dato MÁS RECIENTE disponible. Si la fuente es de una fecha anterior a hoy, aclará de qué fecha es y advertí que puede estar desactualizado. NUNCA des un dato viejo como si fuera el de hoy.\n'
+      + 'COTIZACIONES — REGLA DE VIGENCIA: devolvé ÚNICAMENTE el dato MÁS RECIENTE disponible. Si la fuente es de una fecha anterior, aclará de qué fecha es. NUNCA des un dato viejo como si fuera el de hoy.\n'
+      + 'COTIZACIONES — HORARIO del BNA: el Banco Nación actualiza el dólar divisa alrededor de las 15 hs de cada día hábil. ' + reglaHorario + '\n'
       + 'COTIZACIONES — dólar del Banco Nación (BNA):\n'
-      + '- El BNA publica DOS cotizaciones: el dólar BILLETE (efectivo) y el dólar DIVISA (transferencias/comercio exterior, suele ser más bajo). NO son lo mismo.\n'
-      + '- Si te piden el DIVISA, devolvé SOLO el divisa (compra y venta), nunca el billete. Usá SIEMPRE la palabra "divisa" en tu respuesta. Si solo encontrás el billete, escribí EXPLÍCITAMENTE "no encontré el divisa, solo el billete" y NO des el billete como si fuera divisa.\n'
-      + '- Dá la fecha exacta del dato y la compra y la venta por separado, en pesos.\n'
+      + '- El BNA publica DOS cotizaciones en su web (bna.com.ar), en solapas distintas: el dólar BILLETE (efectivo, mostrador) y el dólar DIVISA (transferencias/comercio exterior). NO son lo mismo.\n'
+      + '- CÓMO DISTINGUIRLOS: el DIVISA tiene la BRECHA entre compra y venta MÁS CHICA (compra y venta cercanas, pocos pesos de diferencia). El BILLETE tiene la brecha MÁS GRANDE (compra y venta más separadas). Si ves dos pares de números, el divisa es el de menor diferencia compra/venta.\n'
+      + '- Te piden el DIVISA: devolvé SOLO el divisa (compra y venta), NUNCA el billete. Usá SIEMPRE la palabra "divisa" en tu respuesta. Decí explícitamente cuál es la compra y cuál la venta, en pesos, y la fecha del dato.\n'
+      + '- Si no podés distinguir con seguridad cuál es el divisa, decilo claramente en vez de arriesgar el billete.\n'
       + 'DISTANCIAS entre localidades argentinas:\n'
       + '- Devolvé los KILÓMETROS por RUTA (camino real para auto/camión), NO la distancia en línea recta.\n'
       + '- Usá sitios argentinos de cálculo de rutas (ruta0.com, rutadistancia.com.ar, calcularruta.com, derutasydestinos y similares).\n'
@@ -3648,7 +3655,7 @@ const BUSQUEDA_WEB = {
   // (una distancia no depende del día; agregarle la fecha confunde la búsqueda).
   prepararConsulta(consulta, tipo, hoy){
     if(tipo==='km') return consulta + ' (distancia por ruta en auto/camión, en kilómetros)';
-    if(tipo==='tc') return consulta + ' (al día de hoy, ' + hoy + ')';
+    if(tipo==='tc') return consulta + ' (dólar DIVISA del Banco Nación bna.com.ar, compra y venta de hoy ' + hoy + '; el divisa es el de menor brecha entre compra y venta, no el billete)';
     return consulta;
   },
 
@@ -3664,13 +3671,14 @@ const BUSQUEDA_WEB = {
     if(tipo==='tc'){
       if(/divisa/i.test(resultado)){
         return 'Resultado de la búsqueda web para "'+consulta+'": '+resultado+'. '
-          + 'Es el dólar DIVISA del Banco Nación: cargá la compra en tc y la venta en tc_vendedor. '
-          + 'Confirmale al usuario los valores Y LA FECHA del dato. Si la fecha no es de hoy, avisale que puede estar desactualizado y preguntale si lo carga igual.';
+          + 'Es el dólar DIVISA del Banco Nación. Si el resultado muestra dos pares de números (billete y divisa), el DIVISA es el de MENOR brecha entre compra y venta. '
+          + 'Cargá la compra del divisa en tc y la venta del divisa en tc_vendedor. '
+          + 'Confirmale al usuario los valores Y LA FECHA del dato. Si la fecha no es la de hoy (o todavía no son las 15 hs y es el cierre de ayer), avisale de qué día es y preguntale si lo carga igual.';
       }
       return 'Resultado de la búsqueda web para "'+consulta+'": '+resultado+'. '
-        + 'ATENCIÓN: este resultado NO confirma que sea el dólar DIVISA (puede ser el billete u otro). '
-        + 'NO cargues ningún valor en tc ni tc_vendedor. Avisale al usuario que no pudiste confirmar el divisa del BNA '
-        + 'y preguntale si quiere que cargues un tipo de cambio a mano.';
+        + 'ATENCIÓN: este resultado NO confirma claramente que sea el dólar DIVISA (puede ser el billete). '
+        + 'Recordá: el divisa es el par con MENOR diferencia entre compra y venta. Si podés identificarlo así en el resultado, usalo y aclará que es el divisa. '
+        + 'Si no, NO cargues nada en tc ni tc_vendedor: avisale al usuario que no pudiste confirmar el divisa del BNA y preguntale si carga el tipo de cambio a mano.';
     }
     return 'Resultado de la búsqueda web para "'+consulta+'": '+resultado+'. Usá este dato para continuar y confirmale al usuario el valor y la fecha.';
   }
@@ -3680,7 +3688,7 @@ const BUSQUEDA_WEB = {
 async function buscarDatoWeb(consulta){
   const hoy = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const tipo = BUSQUEDA_WEB.tipo(consulta);
-  const sys = BUSQUEDA_WEB.sysPrompt(hoy);
+  const sys = BUSQUEDA_WEB.sysPrompt(hoy, new Date().getHours());
   const consultaFinal = BUSQUEDA_WEB.prepararConsulta(consulta, tipo, hoy);
   try{
     const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+GEMINI_KEY,{
@@ -3760,6 +3768,19 @@ function procesarRespuesta(texto){
     agregarMensaje(obj.mensaje || 'Listo, borré todo. Contame la nueva operación.', 'bot');
     return;
   }
+  // Aplica un monto crítico (deuda/cobrar) protegiéndolo de reenvíos erróneos del modelo.
+  // Regla: una vez cargado un valor real (>0), Liza NO puede pisarlo con 0/vacío.
+  // El usuario cambia el monto mandando un valor nuevo (>0); lo borra reiniciando todo
+  // (gemBorrarTodo, que pasa por otro camino). Así un "eco" del modelo con 0 no borra la deuda.
+  function aplicarMontoCritico(id, valorNuevo){
+    const el = document.getElementById(id);
+    const actual = el ? parseNum(el.value) : 0;
+    const nuevo = parseFloat(valorNuevo);
+    // Si ya hay un valor cargado y el nuevo es 0/NaN, es un reenvío redundante: ignorar.
+    if(actual > 0 && (isNaN(nuevo) || nuevo === 0)) return;
+    setInputVal(id, valorNuevo);
+  }
+
   // Aplica al formulario todos los campos "básicos" de carga que vengan en c.
   // Se usa en dos lugares: junto al buscar_web (antes de salir a buscar) y en el flujo
   // normal de abajo. NO dispara calcular() ni mostrar_resultado: eso lo decide quien la llama.
@@ -3781,10 +3802,10 @@ function procesarRespuesta(texto){
     if(c.k_total!==undefined && c.modo!=='importe'){ if(!c.modo && typeof setModo==='function') setModo('kilos'); setInputVal('k_total',c.k_total); marcarCargado('k_total'); }
     if(c.tc!==undefined){ setInputVal('tc',c.tc); marcarCargado('tc'); }
     if(c.tc_vendedor!==undefined){ setInputVal('tc_vendedor',c.tc_vendedor); marcarCargado('tc','tc_vendedor'); }
-    if(c.deuda_usd!==undefined) setInputVal('deuda_usd',c.deuda_usd);
-    if(c.deuda_ars!==undefined) setInputVal('deuda_ars',c.deuda_ars);
-    if(c.cobrar_usd!==undefined) setInputVal('cobrar_usd',c.cobrar_usd);
-    if(c.cobrar_ars!==undefined) setInputVal('cobrar_ars',c.cobrar_ars);
+    if(c.deuda_usd!==undefined) aplicarMontoCritico('deuda_usd', c.deuda_usd);
+    if(c.deuda_ars!==undefined) aplicarMontoCritico('deuda_ars', c.deuda_ars);
+    if(c.cobrar_usd!==undefined) aplicarMontoCritico('cobrar_usd', c.cobrar_usd);
+    if(c.cobrar_ars!==undefined) aplicarMontoCritico('cobrar_ars', c.cobrar_ars);
     if(c.factor!==undefined){ setInputVal('factor',c.factor); marcarCargado('factor'); }
     if(c.com!==undefined){ setInputVal('com',c.com); marcarCargado('com'); }
     if(c.g_paritarias!==undefined) setInputVal('g_paritarias',c.g_paritarias);
