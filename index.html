@@ -3754,8 +3754,11 @@ const BUSQUEDA_WEB = {
       const parseNum = s=>{
         // Formato es-AR (1.437,50): punto = miles, coma = decimal.
         if(s.indexOf(',')>=0) return parseFloat(s.replace(/\./g,'').replace(',','.'));
-        // Sin coma: un punto con 1-2 decimales es decimal (1437.50); si no, quitar puntos de miles.
-        if(/^\d+\.\d{1,2}$/.test(s)) return parseFloat(s);
+        // Sin coma: un solo punto que NO tiene exactamente 3 dígitos atrás es decimal
+        // (1423.50, 1423.5 y el formato del BNA 1423.5000). Con exactamente 3 dígitos
+        // (1.422) o varios puntos (1.234.567) es separador de miles.
+        const puntos = (s.match(/\./g)||[]).length;
+        if(puntos===1 && !/\.\d{3}$/.test(s)) return parseFloat(s);
         return parseFloat(s.replace(/\./g,''));
       };
       // Filtro de "parece un tipo de cambio": descarta días, horas, porcentajes y años.
