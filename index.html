@@ -3062,6 +3062,57 @@ function opComplejaSaldoParaPaso2(){
 function opComplejaFin(){ opCompleja = null; }
 
 // ════════════════════════════════════════════════════════════════
+// FOTOS DE PASO: snapshot completo de la pantalla (campos, monedas, modo,
+// destino, tipo de flete y marcas de cargado). Permiten volver a cualquier
+// paso de una operación multigrano: PDF de granos anteriores y edición.
+// ════════════════════════════════════════════════════════════════
+const FOTO_CAMPOS = ['k_total','deuda_usd','deuda_ars','cobrar_usd','cobrar_ars','precio','tc','tc_vendedor','com','factor','hum_recibo','g_paritarias','g_secada','g_fumigada','puntos_libres','g_flete_corto','g_flete_corto_aj','g_flete_corto_km','g_flete_largo','g_flete_largo_aj','g_flete_largo_km','plus_usd','plus_ars_input','rog','volatil_on'];
+const FOTO_CURRS  = ['precio_curr','g_paritarias_curr','g_secada_curr','g_fumigada_curr','g_flete_corto_curr','g_flete_largo_curr'];
+
+function tomarFoto(){
+  const f = {
+    grano: document.getElementById('grano')?.value || 'soja',
+    modo: (typeof modo!=='undefined') ? modo : 'importe',
+    dest: (typeof dest!=='undefined') ? dest : 'auto',
+    fleteTipo: (typeof fleteLargoTipo!=='undefined') ? fleteLargoTipo : 'largo',
+    campos:{}, currs:{},
+    cargados: Object.assign({}, camposCargados)
+  };
+  FOTO_CAMPOS.forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    f.campos[id] = (el.type==='checkbox') ? !!el.checked : el.value;
+  });
+  FOTO_CURRS.forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    f.currs[id] = { curr: el.dataset.curr, txt: el.textContent };
+  });
+  return f;
+}
+
+function restaurarFoto(f){
+  if(!f) return false;
+  // El grano va PRIMERO: su evento change resetea defaults que después
+  // pisamos con los valores de la foto.
+  const g = document.getElementById('grano');
+  if(g){ g.value = f.grano; g.dispatchEvent(new Event('change')); }
+  if(typeof setModo==='function') setModo(f.modo, {noClear:true});
+  if(typeof setDest==='function') setDest(f.dest);
+  if(typeof setFleteTipo==='function') setFleteTipo(f.fleteTipo);
+  Object.keys(f.campos||{}).forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    if(el.type==='checkbox') el.checked = !!f.campos[id];
+    else el.value = f.campos[id];
+  });
+  Object.keys(f.currs||{}).forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    el.dataset.curr = f.currs[id].curr; el.textContent = f.currs[id].txt;
+  });
+  camposCargados = Object.assign({}, f.cargados||{});
+  if(typeof calcular==='function') calcular();
+  return true;
+}
+
+// ════════════════════════════════════════════════════════════════
 // OPERACIÓN POR MONTOS (multipaso fase 1) — cada grano cubre un importe FIJO.
 // Ej: "cancelar 13 millones con soja y 23 millones con maíz".
 // Cada paso es una operación simple en modo importe; el CÓDIGO lleva la lista
@@ -3113,6 +3164,25 @@ function opMontosCargarPasoActual(){
 
 function opMontosFin(){ opMontos = null; }
 
+// Resumen final de la operación por montos (lo arma el código; se usa al cerrar
+// y al actualizar un paso editado).
+function opMontosResumenFinalMsg(){
+  const granoTit = {soja:'Soja',maiz:'Maíz',trigo:'Trigo',cebada:'Cebada',girasol:'Girasol'};
+  let msg = 'Resumen de la operación completa:\n';
+  let totARS=0, totUSD=0;
+  opMontos.pasos.forEach((p,i)=>{
+    const r = opMontos.resumenes[i]||{};
+    msg += '· ' + (granoTit[p.grano]||p.grano) + ': ' + (r.tn||'?') + ' tn para cubrir ' + (r.montoTxt||opMontosMontoTxt(p)) + '.\n';
+    totARS += p.deuda_ars + p.cobrar_ars; totUSD += p.deuda_usd + p.cobrar_usd;
+  });
+  const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+  const tot = [];
+  if(totARS>0) tot.push(fmt(totARS));
+  if(totUSD>0) tot.push(totUSD+' USD');
+  msg += '\nTotal cubierto: ' + tot.join(' y ') + '.';
+  return msg;
+}
+
 // ════════════════════════════════════════════════════════════════
 // MÁQUINA DE ESTADOS DEL FLUJO CONVERSACIONAL
 // El código determina QUÉ preguntar en cada momento. Liza solo interpreta
@@ -3134,8 +3204,12 @@ function flujoEstado(){
   // ---- OPERACIÓN POR MONTOS (multipaso: cada grano cubre un importe fijo) ----
   if(opMontos && opMontos.activa){
     const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+    if(opMontos.editandoIdx!=null){
+      const re = opMontos.resumenes[opMontos.editandoIdx];
+      return est('M_EDIT', 'El usuario está EDITANDO el paso de '+(granoLbl[re.grano]||re.grano)+' (cubre '+re.montoTxt+'). Los cambios que pida (precio, comisión, factor, recibo) mandalos como campos normales. Cuando diga que está listo / ya está / nada más, mandá "op_montos_actualizar": true. NO mandes op_montos_siguiente ni mostrar_resultado.');
+    }
     if(opMontos.cerrada){
-      return est('M_CERRADO', 'La operación por montos está COMPLETA. El último grano sigue cargado en la app: si el usuario pide PDF mandá "generar_pdf" (el PDF es de ese grano; los PDF nunca mezclan granos). Si cambia un dato, mandá ese campo: aplica al último grano.');
+      return est('M_CERRADO', 'La operación por montos está COMPLETA. El último grano sigue cargado en la app. PDF del grano cargado: "generar_pdf". PDF de OTRO grano de la operación: "pdf_grano": "<grano>". Para CAMBIAR algo de cualquier grano: "op_montos_editar": "<grano>". Los PDF nunca mezclan granos.');
     }
     const p = opMontos.pasos[opMontos.idx];
     const gl = granoLbl[p.grano]||p.grano;
@@ -3155,6 +3229,9 @@ function flujoEstado(){
 
   // ---- OPERACIÓN COMPLEJA ----
   if(opCompleja && opCompleja.activa){
+    if(opCompleja.editando){
+      return est('C_EDIT', 'El usuario está EDITANDO el paso '+opCompleja.editando+' de la operación compleja cerrada. Los cambios van como campos normales. Cuando diga que está listo, mandá "op_compleja_recalcular": true.'+(opCompleja.editando===1?' El sistema recalcula el aporte y reacomoda el paso 2 SOLO: no preguntes de nuevo las condiciones del segundo grano.':''));
+    }
     // PASO 1: cargar y definir condiciones del primer grano
     if(opCompleja.paso === 1){
       // Si el saldo ya se mostró, lo que sigue es elegir qué cubrir y el precio del grano 2.
@@ -3181,7 +3258,7 @@ function flujoEstado(){
       return est('C2_LISTO', 'Ya están las condiciones del segundo grano. Mandá "op_compleja_cerrar": true para el resumen final.');
     }
     if(opCompleja.paso === 3){
-      return est('C_CERRADO', 'La operación compleja está cerrada. Si el usuario pide PDF mandá "generar_pdf". Si pide cambiar algo del segundo grano, mandá ese campo.');
+      return est('C_CERRADO', 'La operación compleja está cerrada. PDF del grano cargado (el segundo): "generar_pdf". PDF del primer grano: "pdf_grano": "<grano>". Para CAMBIAR algo del paso 1 o del 2: "op_compleja_editar_paso": 1 (o 2); si edita el paso 1, el sistema reacomoda el 2 solo.');
     }
   }
 
@@ -3466,27 +3543,31 @@ async function llamarGemini(texto){
     }
   }
 
-  // Desglose POR TONELADA (lo calcula el CÓDIGO con los totales reales; Liza tiene
-  // PROHIBIDO etiquetar un número con un concepto que no le corresponde).
+  // Desglose POR TONELADA: ESPEJO de las líneas reales de la liquidación
+  // (Importe Bruto, Deducciones, Retenciones, Total a pagar — las mismas del PDF),
+  // sumando canje + pago y dividiendo por las toneladas. SIN fórmulas propias:
+  // el motor ya calculó todo; acá solo se divide.
   let desglosePorTn = '';
-  if(hayCalculo && typeof parseNum==='function' && typeof pv==='function' && typeof ars==='function'){
-    const num = s => parseNum((''+s).replace(/[^\d.,-]/g,'')) || 0;
+  if(hayCalculo && typeof parseNum==='function' && typeof ars==='function'){
+    const num = s => { const v = parseNum((''+s).replace(/[^\d.,-]/g,'')); return isNaN(v)?0:v; };
     const tnN = num(resKilos);
     if(tnN>0){
-      const brutoT = num(resNetoTotal);          // bruto total de la liquidación
-      const descT  = num(resGastosNeg);          // total descontado (gastos + deuda)
-      const recT   = num(resRecibis);            // lo que recibe el productor
-      const tcAct  = pv('tc')||0;
-      const deudaAplic = (pv('deuda_ars')||0) + (pv('deuda_usd')||0)*tcAct; // deuda cancelada, pesificada
-      const gastosT = Math.max(0, descT - deudaAplic); // gastos puros, sin deuda
+      const el2 = id => num(document.getElementById(id)?.textContent||'');
+      const brutoIVA = el2('c_bruto') + el2('p_bruto');             // Importe Bruto (ya con IVA)
+      const deduc    = el2('c_total_ded') + el2('p_total_ded');     // Total Deducciones
+      const reten    = el2('c_total_ret') + el2('p_total_ret');     // Total Retenciones
+      const aPagar   = el2('c_total_pagar') + el2('p_total_pagar'); // Total a pagar (neto, antes de deuda)
+      const recT     = num(resRecibis);                              // lo que recibe el productor
       const f = n => ars(Math.round(n));
-      desglosePorTn = '\n\nDESGLOSE POR TONELADA (calculado por el sistema; respondé SOLO con estos valores según lo que pidan. Si piden un corte que NO figura acá, decí que no lo tenés calculado: NUNCA respondas con otro número cambiándole la etiqueta):'
-        + '\n- BRUTO por tn (precio x TC x factor, sin IVA y sin descontar nada): ' + f(brutoT/tnN)
-        + '\n- BRUTO CON IVA por tn (bruto + 10,5% de IVA; la liquidación se arma sobre este): ' + f(brutoT*1.105/tnN)
-        + '\n- GASTOS por tn (comisión, sellos, retenciones, flete y condiciones; SIN la deuda): ' + f(gastosT/tnN)
-        + '\n- NETO DE GASTOS por tn (bruto CON IVA menos gastos, ANTES de aplicar la deuda): ' + f((recT + deudaAplic)/tnN)
-        + '\n- NETO FINAL por tn (lo que recibe el productor, después de gastos Y deuda): ' + f(recT/tnN)
-        + '\nSi te preguntan CÓMO se llega al neto: bruto con IVA menos gastos; el IVA del 10,5% es parte de la cuenta, no lo omitas.';
+      if(brutoIVA>0){
+        desglosePorTn = '\n\nDESGLOSE POR TONELADA (son las MISMAS líneas de la liquidación dividido las toneladas; coinciden con el detalle y el PDF. Respondé SOLO con estos valores. Si piden un corte que NO figura acá, decí que no lo tenés calculado: NUNCA respondas con otro número cambiándole la etiqueta):'
+          + '\n- IMPORTE BRUTO por tn (con IVA; el flete y las condiciones de recibo ya están descontados dentro del precio): ' + f(brutoIVA/tnN)
+          + '\n- DEDUCCIONES por tn (comisión, sellos, etc.): ' + f(deduc/tnN)
+          + '\n- RETENCIONES por tn: ' + f(reten/tnN)
+          + '\n- TOTAL A PAGAR por tn (neto de gastos, ANTES de aplicar la deuda): ' + f(aPagar/tnN)
+          + '\n- LO QUE RECIBE EL PRODUCTOR por tn (después de gastos Y deuda): ' + f(recT/tnN)
+          + '\nSi preguntan CÓMO se llega: Importe Bruto − Deducciones − Retenciones = Total a pagar; de ahí se descuenta la deuda y queda lo que recibe. Son las líneas de la liquidación: si el usuario discute un número, leé el detalle de la liquidación con él, NUNCA insistas repitiendo el mismo valor.';
+      }
     }
   }
 
@@ -3525,7 +3606,7 @@ async function llamarGemini(texto){
       bloqueOpCompleja = '\n\nOPERACIÓN COMPLEJA EN CURSO (ya completada los dos pasos):'
         + '\n- Paso 1: ' + (r1.tn||'?') + ' tn de ' + (r1.grano||'soja') + ' que aportaron ' + fmt(r1.aporte)
         + '\n- Paso 2: el segundo grano (' + (opCompleja.grano2||'?') + ') está cargado AHORA en la app (mirá los DATOS INGRESADOS y RESULTADOS de arriba).'
-        + '\n- Si el usuario pide recalcular, cambiar un dato o un detalle, se refiere al SEGUNDO grano que está cargado. NO digas que no tenés nada cargado: la operación del paso 2 está en la app. Si pide el PDF, mandá generar_pdf.';
+        + '\n- El segundo grano está cargado en la app; hay FOTOS de los dos pasos. PDF del primer grano: "pdf_grano". Cambiar algo del paso 1 o 2: "op_compleja_editar_paso" (el paso 1 cascadea al 2 solo). Si pide el PDF del grano cargado, mandá generar_pdf.';
     } else if(opCompleja.paso===1){
       bloqueOpCompleja = '\n\nOPERACIÓN COMPLEJA EN CURSO (PASO 1, primer grano):'
         + '\n- Totales a cubrir: deuda ' + (opCompleja.deudaUSD||0) + ' USD y ' + fmt(opCompleja.deudaARS) + ' ARS; a cobrar ' + (opCompleja.cobrarUSD||0) + ' USD y ' + fmt(opCompleja.cobrarARS) + ' ARS.'
@@ -3547,7 +3628,7 @@ async function llamarGemini(texto){
     if(opMontos.cerrada){
       bloqueOpCompleja += '\n\nOPERACIÓN POR MONTOS (COMPLETA):'
         + '\n- Pasos: ' + opMontos.resumenes.map(r=>(gl2[r.grano]||r.grano)+' '+(r.tn||'?')+' tn para '+r.montoTxt).join('; ') + '.'
-        + '\n- El ÚLTIMO grano sigue cargado en la app: recálculos y PDF se refieren a ese grano. Los PDF NUNCA mezclan granos; el resumen del chat sí narra la operación completa.';
+        + '\n- El ÚLTIMO grano sigue cargado en la app. Hay FOTOS guardadas de cada paso: PDF de otro grano con "pdf_grano", edición de cualquier grano con "op_montos_editar". Los PDF NUNCA mezclan granos; el resumen del chat sí narra la operación completa.';
     } else {
       const p = opMontos.pasos[opMontos.idx];
       bloqueOpCompleja += '\n\nOPERACIÓN POR MONTOS EN CURSO: paso ' + (opMontos.idx+1) + ' de ' + opMontos.pasos.length + '.'
@@ -3581,7 +3662,7 @@ En resumen: no te adelantás con cifras al cargar/recalcular, pero cuando te pre
 </regla_cifras>
 
 <claves_validas>
-grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar.
+grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano.
 </claves_validas>
 
 <deteccion_tipo_operacion>
@@ -3671,6 +3752,7 @@ PASO 2 — ELECCIÓN + SEGUNDO GRANO:
 2d) Cuando terminaste las condiciones del segundo grano, mandá "op_compleja_cerrar": true. El SISTEMA muestra el resumen final de los dos pasos y ofrece el PDF.
 
 2e) Si el usuario pide el PDF, mandá "generar_pdf": "resumen".
+EDICIÓN (solo con la operación cerrada): para cambiar algo del paso 1 o del paso 2, mandá "op_compleja_editar_paso": 1 (o 2). Aplicá los cambios como campos normales y al final mandá "op_compleja_recalcular": true. Si editó el paso 1, el SISTEMA recalcula el aporte y reacomoda SOLO el paso 2 con las mismas condiciones: no vuelvas a preguntar las condiciones del segundo grano. Para el PDF del grano que no está cargado, "pdf_grano": "<grano>".
 </flujo_complejo>
 
 <flujo_montos>
@@ -3682,7 +3764,8 @@ Operación POR MONTOS: dos o más granos, cada uno cubre un monto fijo que dijo 
 2) El sistema carga el primer grano y <que_hacer_ahora> te dice qué preguntar. Por cada grano, UNO por turno: precio, tipo de cambio (solo la primera vez; en los granos siguientes se hereda), comisión, factor, recibo. NUNCA mandes mostrar_resultado en esta operación.
 3) Cuando terminaste las condiciones de un grano (o el usuario dijo "así está bien"), mandá "op_montos_siguiente": true. El SISTEMA calcula y dice las toneladas necesarias, y ofrece el PDF de ESE grano.
 4) Si el usuario quiere el PDF, mandá "generar_pdf". Cuando quiera seguir (o diga que no quiere el PDF), mandá "op_montos_continuar": true y el sistema carga el grano siguiente.
-5) Después del último grano, el SISTEMA arma el resumen completo de la operación. Los PDF son SIEMPRE de un solo grano (nunca mezclan granos ni canje con pago); el resumen del chat es el que narra la operación entera. Cerrada la operación, el único PDF disponible es el del ÚLTIMO grano: si piden el de un grano anterior, explicá que ya no está cargado y que se pide al cerrar cada paso.
+5) Después del último grano, el SISTEMA arma el resumen completo de la operación. Los PDF son SIEMPRE de un solo grano (nunca mezclan granos ni canje con pago); el resumen del chat es el que narra la operación entera. Para el PDF de un grano anterior usá "pdf_grano": "<grano>".
+6) EDICIÓN (solo con la operación cerrada): si quiere CAMBIAR algo de un grano (precio, comisión, condiciones), mandá "op_montos_editar": "<grano>". El sistema vuelve a ese paso; aplicá los cambios como campos normales, y cuando el usuario diga que está listo mandá "op_montos_actualizar": true. El sistema recalcula y rearma el resumen completo.
 </flujo_montos>
 
 <buscar_web>
@@ -3696,7 +3779,7 @@ Si el sistema no pudo confirmar el divisa (o solo halló el billete), avisá que
 <generar_pdf>
 Cuando el usuario pida PDF ("pasame el pdf", "el comprobante"), mandá "generar_pdf": "resumen" (o "canje"/"pago" si especifica). Decirlo en el mensaje NO alcanza: sin el campo no se descarga.
 REGLA DE ORO DEL PDF: si VOS ofreciste el PDF y el usuario responde "sí", "dale", "ok" o similar, mandá "generar_pdf" EN ESE MISMO turno. PROHIBIDO volver a preguntar si quiere el PDF: ya dijo que sí.
-El PDF es SIEMPRE del grano cargado AHORA en la app. Si piden el PDF de un grano de un paso anterior (operación por montos o compleja), NO prometas generarlo: esos datos ya no están. Explicá que el PDF de cada grano se pide al cerrar ese paso, y ofrecé el del grano actual.
+Si piden el PDF del grano cargado AHORA, mandá "generar_pdf" directo, sin aclaraciones. Si piden el PDF de OTRO grano de la operación (un paso anterior), mandá "pdf_grano": "<grano>" (ej: "pdf_grano": "maiz"): el sistema lo arma con la foto guardada de ese paso y deja la pantalla como estaba. Podés combinarlo con "generar_pdf": "canje" o "pago" si piden esa liquidación específica. Los PDF siempre son de UN solo grano. No des aclaraciones sobre pasos anteriores salvo que pregunten.
 </generar_pdf>
 
 <reiniciar>
@@ -4184,6 +4267,134 @@ function procesarRespuesta(texto){
     buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
     return;
   }
+  // ── PDF DE CUALQUIER GRANO de la operación (usa las fotos guardadas por paso) ──
+  if(c.pdf_grano){
+    const gPed = (''+c.pdf_grano).toLowerCase().replace('í','i').trim();
+    const granoAct = document.getElementById('grano')?.value;
+    const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+    if(gPed === granoAct){
+      ejecutarPDF(c.generar_pdf !== undefined ? c.generar_pdf : 'resumen');
+      return;
+    }
+    // Buscar la foto de ese grano: por montos (la más reciente) o compleja (paso 2 manda sobre 1)
+    let foto = null;
+    if(opMontos){
+      const r = (opMontos.resumenes||[]).slice().reverse().find(x=>x.grano===gPed && x.foto);
+      if(r) foto = r.foto;
+    }
+    if(!foto && opCompleja){
+      if(opCompleja.foto2 && opCompleja.foto2.grano===gPed) foto = opCompleja.foto2;
+      else if(opCompleja.foto1 && opCompleja.foto1.grano===gPed) foto = opCompleja.foto1;
+    }
+    if(!foto){
+      agregarMensaje('No tengo guardados los datos de ' + (glMap[gPed]||gPed) + ' en esta operación, así que ese PDF no lo puedo armar. El que sí puedo darte es el de ' + (glMap[granoAct]||granoAct) + ', que es el grano cargado.', 'bot');
+      return;
+    }
+    // Swap seguro: foto del grano pedido → PDF → todo vuelve como estaba (jsPDF es sincrónico)
+    const estadoActual = tomarFoto();
+    restaurarFoto(foto);
+    ejecutarPDF(c.generar_pdf !== undefined ? c.generar_pdf : 'resumen');
+    restaurarFoto(estadoActual);
+    agregarMensaje('Ahí va el PDF de ' + (glMap[gPed]||gPed) + '. La pantalla queda como estaba.', 'bot');
+    return;
+  }
+  // ── EDICIÓN de un paso de la operación POR MONTOS (solo con la operación cerrada) ──
+  if(c.op_montos_editar && opMontos && opMontos.cerrada){
+    const gPed = (''+c.op_montos_editar).toLowerCase().replace('í','i').trim();
+    const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+    let i = -1;
+    for(let k=opMontos.resumenes.length-1; k>=0; k--){
+      if(opMontos.resumenes[k].grano===gPed && opMontos.resumenes[k].foto){ i=k; break; }
+    }
+    if(i<0){
+      agregarMensaje('No encuentro un paso de ' + (glMap[gPed]||gPed) + ' en esta operación. Los granos cargados fueron: ' + opMontos.resumenes.map(r=>r.grano).join(', ') + '.', 'bot');
+      return;
+    }
+    opMontos.editandoIdx = i;
+    restaurarFoto(opMontos.resumenes[i].foto);
+    agregarMensaje('Listo, volvimos al paso de ' + (glMap[gPed]||gPed) + ' (cubre ' + opMontos.resumenes[i].montoTxt + '). Decime qué cambiás: precio, comisión, factor o condiciones de recibo.', 'bot');
+    return;
+  }
+  if(c.op_montos_actualizar && opMontos && opMontos.cerrada && opMontos.editandoIdx!=null){
+    aplicarCamposBasicos(c); // por si manda el último cambio en el mismo turno
+    if(typeof calcular==='function') calcular();
+    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+    const i = opMontos.editandoIdx; opMontos.editandoIdx = null;
+    opMontos.resumenes[i].tn = gv('res_kilos');
+    opMontos.resumenes[i].foto = tomarFoto();
+    const last = opMontos.resumenes.length - 1;
+    if(i!==last && opMontos.resumenes[last].foto) restaurarFoto(opMontos.resumenes[last].foto);
+    agregarMensaje('Listo, actualicé ese paso.\n\n' + opMontosResumenFinalMsg(), 'bot');
+    return;
+  }
+  // ── EDICIÓN de un paso de la operación COMPLEJA (solo cerrada; paso 1 cascadea al 2) ──
+  if(c.op_compleja_editar_paso && opCompleja && opCompleja.paso===3){
+    const n = parseInt(c.op_compleja_editar_paso, 10);
+    const foto = (n===1) ? opCompleja.foto1 : (n===2) ? opCompleja.foto2 : null;
+    if(!foto){
+      agregarMensaje('No tengo guardado ese paso para editarlo. De esta operación puedo editar el paso 1 o el paso 2.', 'bot');
+      return;
+    }
+    const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+    opCompleja.editando = n;
+    restaurarFoto(foto);
+    agregarMensaje('Listo, volvimos al paso ' + n + ' (' + (glMap[foto.grano]||foto.grano) + '). Decime qué cambiás.' + (n===1 ? ' Ojo: al recalcular, el paso 2 se reacomoda solo con el saldo nuevo.' : ''), 'bot');
+    return;
+  }
+  if(c.op_compleja_recalcular && opCompleja && opCompleja.editando){
+    aplicarCamposBasicos(c); // por si manda el último cambio en el mismo turno
+    if(typeof calcular==='function') calcular();
+    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+    const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+    const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+    if(opCompleja.editando===2){
+      opCompleja.editando = null;
+      const tn2 = gv('res_kilos');
+      opCompleja.foto2 = tomarFoto();
+      if(opCompleja.resumen2) opCompleja.resumen2.tn = tn2;
+      agregarMensaje('Listo, recalculé el paso 2: ahora necesitás ' + tn2 + ' tn de ' + (glMap[opCompleja.foto2.grano]||'el segundo grano') + ' para cubrir el saldo. El paso 1 no cambia.', 'bot');
+      return;
+    }
+    // Editando el paso 1: recalcular aporte y CASCADA al paso 2
+    opCompleja.editando = null;
+    const lc = window._lastCalc || {};
+    const tcRe = lc.tc || (typeof pv==='function' ? pv('tc') : 0);
+    let aporteARS = 0;
+    if(opCompleja.montoFijo1){
+      aporteARS = opCompleja.monto1ARS + opCompleja.monto1USD*tcRe;
+    } else if(typeof liq==='function' && typeof pv==='function' && lc.p){
+      const tnTotal = pv('k_total')||0;
+      const r = liq(tnTotal, 'pago', lc.p);
+      const plus = lc.plusARStn>0 ? tnTotal*lc.plusARStn : tnTotal*(lc.plusUSD||0)*tcRe;
+      aporteARS = (r.tp||0) + plus;
+    }
+    const aporteViejo = opCompleja.aporte1 || 0;
+    opComplejaCalcularSaldo(aporteARS, tcRe);
+    opCompleja.aporte1 = aporteARS;
+    opCompleja.tcComprador = (typeof pv==='function') ? pv('tc') : tcRe;
+    opCompleja.tcVendedor  = (typeof pv==='function') ? pv('tc_vendedor') : tcRe;
+    opCompleja.resumen1 = { grano: document.getElementById('grano')?.value||'', tn: gv('res_kilos'), aporte: aporteARS };
+    opCompleja.foto1 = tomarFoto();
+    let msg = 'Recalculé el paso 1: ' + (glMap[opCompleja.resumen1.grano]||'el primer grano') + ' ahora aporta ' + fmt(aporteARS) + ' (antes ' + fmt(aporteViejo) + ').';
+    if(opCompleja.foto2){
+      const tn2Vieja = (opCompleja.resumen2 && opCompleja.resumen2.tn) || '';
+      restaurarFoto(opCompleja.foto2);
+      const saldoNuevo = opComplejaSaldoParaPaso2();
+      setInputVal('deuda_ars', Math.round(saldoNuevo.deudaARS));
+      setInputVal('cobrar_ars', Math.round(saldoNuevo.cobrarARS||0));
+      if(typeof calcular==='function') calcular();
+      const tn2 = gv('res_kilos');
+      opCompleja.foto2 = tomarFoto();
+      if(opCompleja.resumen2) opCompleja.resumen2.tn = tn2;
+      msg += ' El saldo quedó en ' + fmt(saldoNuevo.deudaARS) + ' de deuda'
+           + (saldoNuevo.cobrarARS>0 ? ' y ' + fmt(saldoNuevo.cobrarARS) + ' a cobrar' : '')
+           + '. El paso 2 se reacomodó con las mismas condiciones: ahora son ' + tn2 + ' tn de '
+           + (glMap[opCompleja.foto2.grano]||'el segundo grano')
+           + (tn2Vieja ? ' (antes ' + tn2Vieja + ')' : '') + '.';
+    }
+    agregarMensaje(msg, 'bot');
+    return;
+  }
   // ── OPERACIÓN POR MONTOS (cada grano cubre un importe fijo; el código lleva los pasos) ──
   if(c.op_montos_iniciar){
     const om = opMontosIniciar(c.op_montos_iniciar);
@@ -4220,7 +4431,7 @@ function procesarRespuesta(texto){
     const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
     const pAct = opMontos.pasos[opMontos.idx];
     const tnNec = gv('res_kilos');
-    opMontos.resumenes.push({ grano:pAct.grano, tn:tnNec, montoTxt:opMontosMontoTxt(pAct) });
+    opMontos.resumenes.push({ grano:pAct.grano, tn:tnNec, montoTxt:opMontosMontoTxt(pAct), foto: tomarFoto() });
     // Guardar el TC para heredarlo en los pasos siguientes
     if(typeof pv==='function'){ opMontos.tcComprador = pv('tc'); opMontos.tcVendedor = pv('tc_vendedor'); }
     const glAct = granoLbl[pAct.grano]||pAct.grano;
@@ -4235,20 +4446,7 @@ function procesarRespuesta(texto){
     // Era el último paso: resumen final de toda la operación (el resumen SÍ narra todo;
     // el PDF disponible es el del último grano, que queda cargado).
     opMontos.cerrada = true;
-    const granoTit = {soja:'Soja',maiz:'Maíz',trigo:'Trigo',cebada:'Cebada',girasol:'Girasol'};
-    let msg = 'Cerramos ' + glAct + ': necesitás ' + tnNec + ' tn.\n\nResumen de la operación completa:\n';
-    let totARS=0, totUSD=0;
-    opMontos.pasos.forEach((p,i)=>{
-      const r = opMontos.resumenes[i]||{};
-      msg += '· ' + (granoTit[p.grano]||p.grano) + ': ' + (r.tn||'?') + ' tn para cubrir ' + (r.montoTxt||opMontosMontoTxt(p)) + '.\n';
-      totARS += p.deuda_ars + p.cobrar_ars; totUSD += p.deuda_usd + p.cobrar_usd;
-    });
-    const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
-    const tot = [];
-    if(totARS>0) tot.push(fmt(totARS));
-    if(totUSD>0) tot.push(totUSD+' USD');
-    msg += '\nTotal cubierto: ' + tot.join(' y ') + '. ¿Querés el PDF de ' + glAct + '?';
-    agregarMensaje(msg, 'bot');
+    agregarMensaje('Cerramos ' + glAct + ': necesitás ' + tnNec + ' tn.\n\n' + opMontosResumenFinalMsg() + ' ¿Querés el PDF de ' + glAct + '?', 'bot');
     return;
   }
   // Avance al siguiente paso: limpia la app (conservando el TC) y carga el grano que sigue
@@ -4340,6 +4538,8 @@ function procesarRespuesta(texto){
     const r1 = opCompleja.resumen1 || {};
     const granoLbl = {soja:'soja',maiz:'maíz',trigo:'trigo',cebada:'cebada',girasol:'girasol'};
     const granoPaso2 = opCompleja.grano2 || (document.getElementById('grano')?.value);
+    opCompleja.resumen2 = { grano: granoPaso2, tn: tnNec };
+    opCompleja.foto2 = tomarFoto();
     let msg = 'Resumen de la operación completa:\n';
     if(r1.tn){
       msg += '· Paso 1: ' + r1.tn + ' tn de ' + (granoLbl[r1.grano]||r1.grano||'soja')
@@ -4438,6 +4638,7 @@ function procesarRespuesta(texto){
         tn: gv('res_kilos'),
         aporte: aporteARS
       };
+      opCompleja.foto1 = tomarFoto();
       if(saldo){
         const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
         const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
@@ -4508,29 +4709,22 @@ function procesarRespuesta(texto){
 
   agregarMensaje(msg,'bot');
   // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
-  if(c.generar_pdf){
-    // Integridad en operación por montos: el PDF SOLO puede ser del grano cargado.
-    // Los datos de pasos anteriores ya no existen: avisarlo, nunca entregar un PDF
-    // con datos de otro grano haciéndolo pasar por el pedido.
-    if(opMontos && opMontos.activa){
-      const perdidos = opMontos.resumenes.length - ((opMontos.cerrada || opMontos.esperandoAvance) ? 1 : 0);
-      if(perdidos > 0){
-        const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
-        const granoAct = document.getElementById('grano')?.value;
-        agregarMensaje('Ojo: este PDF es de ' + (glMap[granoAct]||granoAct) + ', que es el grano cargado ahora. Los datos de los granos anteriores ya no están en la app; el PDF de cada grano se genera al cerrar ese paso, antes de seguir.', 'bot');
-      }
-    }
-    let tipo = (''+c.generar_pdf).toLowerCase();
+  // Ejecuta la descarga del PDF del estado ACTUAL de la pantalla (jsPDF, sincrónico).
+  function ejecutarPDF(tipoPedido){
+    let tipo = (''+tipoPedido).toLowerCase();
     if(tipo!=='canje' && tipo!=='pago') tipo='resumen';
+    try{ descargarPDF(tipo); return true; }
+    catch(e){ agregarMensaje('Tuve un problema al generar el PDF. Probá con el botón PDF de la pantalla.', 'error'); return false; }
+  }
+  if(c.generar_pdf && !c.pdf_grano){
     // Verificar que el USUARIO haya cargado datos reales (no los defaults de la app).
-    // En operación compleja completada (paso 3) sí hay datos del 2do grano.
     const hayDatosReales = (camposCargados['grano'] && camposCargados['precio'])
-      || (opCompleja && opCompleja.paso===3);
+      || (opCompleja && opCompleja.paso===3)
+      || (opMontos && (opMontos.cerrada || opMontos.esperandoAvance));
     if(!hayDatosReales){
       agregarMensaje('Para generar el PDF necesito la operación cargada: grano, toneladas y precio. ¿Me los pasás?', 'bot');
     } else if(typeof descargarPDF==='function'){
-      try{ descargarPDF(tipo); }
-      catch(e){ agregarMensaje('Tuve un problema al generar el PDF. Probá con el botón PDF de la pantalla.', 'error'); }
+      ejecutarPDF(c.generar_pdf);
     }
   }
 }
