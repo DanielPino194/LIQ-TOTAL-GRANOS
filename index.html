@@ -3481,10 +3481,12 @@ async function llamarGemini(texto){
       const gastosT = Math.max(0, descT - deudaAplic); // gastos puros, sin deuda
       const f = n => ars(Math.round(n));
       desglosePorTn = '\n\nDESGLOSE POR TONELADA (calculado por el sistema; respondé SOLO con estos valores según lo que pidan. Si piden un corte que NO figura acá, decí que no lo tenés calculado: NUNCA respondas con otro número cambiándole la etiqueta):'
-        + '\n- BRUTO por tn (precio x TC x factor, sin descontar nada): ' + f(brutoT/tnN)
+        + '\n- BRUTO por tn (precio x TC x factor, sin IVA y sin descontar nada): ' + f(brutoT/tnN)
+        + '\n- BRUTO CON IVA por tn (bruto + 10,5% de IVA; la liquidación se arma sobre este): ' + f(brutoT*1.105/tnN)
         + '\n- GASTOS por tn (comisión, sellos, retenciones, flete y condiciones; SIN la deuda): ' + f(gastosT/tnN)
-        + '\n- NETO DE GASTOS por tn (bruto menos gastos, ANTES de aplicar la deuda): ' + f((recT + deudaAplic)/tnN)
-        + '\n- NETO FINAL por tn (lo que recibe el productor, después de gastos Y deuda): ' + f(recT/tnN);
+        + '\n- NETO DE GASTOS por tn (bruto CON IVA menos gastos, ANTES de aplicar la deuda): ' + f((recT + deudaAplic)/tnN)
+        + '\n- NETO FINAL por tn (lo que recibe el productor, después de gastos Y deuda): ' + f(recT/tnN)
+        + '\nSi te preguntan CÓMO se llega al neto: bruto con IVA menos gastos; el IVA del 10,5% es parte de la cuenta, no lo omitas.';
     }
   }
 
