@@ -3543,32 +3543,12 @@ async function llamarGemini(texto){
     }
   }
 
-  // Desglose POR TONELADA: ESPEJO de las líneas reales de la liquidación
-  // (Importe Bruto, Deducciones, Retenciones, Total a pagar — las mismas del PDF),
-  // sumando canje + pago y dividiendo por las toneladas. SIN fórmulas propias:
-  // el motor ya calculó todo; acá solo se divide.
+  // Preguntas por tonelada: el CÓDIGO imprime la tabla (clave desglose_tn).
+  // A Liza NO se le pasan los números: sin números en su contexto, no puede
+  // re-etiquetarlos (la causa raíz de los valores con etiqueta inventada).
   let desglosePorTn = '';
-  if(hayCalculo && typeof parseNum==='function' && typeof ars==='function'){
-    const num = s => { const v = parseNum((''+s).replace(/[^\d.,-]/g,'')); return isNaN(v)?0:v; };
-    const tnN = num(resKilos);
-    if(tnN>0){
-      const el2 = id => num(document.getElementById(id)?.textContent||'');
-      const brutoIVA = el2('c_bruto') + el2('p_bruto');             // Importe Bruto (ya con IVA)
-      const deduc    = el2('c_total_ded') + el2('p_total_ded');     // Total Deducciones
-      const reten    = el2('c_total_ret') + el2('p_total_ret');     // Total Retenciones
-      const aPagar   = el2('c_total_pagar') + el2('p_total_pagar'); // Total a pagar (neto, antes de deuda)
-      const recT     = num(resRecibis);                              // lo que recibe el productor
-      const f = n => ars(Math.round(n));
-      if(brutoIVA>0){
-        desglosePorTn = '\n\nDESGLOSE POR TONELADA (son las MISMAS líneas de la liquidación dividido las toneladas; coinciden con el detalle y el PDF. Respondé SOLO con estos valores. Si piden un corte que NO figura acá, decí que no lo tenés calculado: NUNCA respondas con otro número cambiándole la etiqueta):'
-          + '\n- IMPORTE BRUTO por tn (con IVA; el flete y las condiciones de recibo ya están descontados dentro del precio): ' + f(brutoIVA/tnN)
-          + '\n- DEDUCCIONES por tn (comisión, sellos, etc.): ' + f(deduc/tnN)
-          + '\n- RETENCIONES por tn: ' + f(reten/tnN)
-          + '\n- TOTAL A PAGAR por tn (neto de gastos, ANTES de aplicar la deuda): ' + f(aPagar/tnN)
-          + '\n- LO QUE RECIBE EL PRODUCTOR por tn (después de gastos Y deuda): ' + f(recT/tnN)
-          + '\nSi preguntan CÓMO se llega: Importe Bruto − Deducciones − Retenciones = Total a pagar; de ahí se descuenta la deuda y queda lo que recibe. Son las líneas de la liquidación: si el usuario discute un número, leé el detalle de la liquidación con él, NUNCA insistas repitiendo el mismo valor.';
-      }
-    }
+  if(hayCalculo){
+    desglosePorTn = '\n\nVALORES POR TONELADA: ante CUALQUIER pregunta tipo "cuánto por tonelada", "cuánto me queda", "después de gastos", "libre de gastos", "cuánto va a la deuda" o parecida, mandá "desglose_tn": true y NADA más en campos. El sistema imprime la tabla completa con todas las líneas. PROHIBIDO responder vos con un número por tonelada: NO tenés esos valores.';
   }
 
   // Bloque de resultados calculados para inyectar en el prompt
@@ -3662,7 +3642,7 @@ En resumen: no te adelantás con cifras al cargar/recalcular, pero cuando te pre
 </regla_cifras>
 
 <claves_validas>
-grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano.
+grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano, desglose_tn.
 </claves_validas>
 
 <regla_de_hierro_campos>
@@ -4378,6 +4358,37 @@ function procesarRespuesta(texto){
     }
     // Resto de casos: Gemini como siempre.
     buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
+    return;
+  }
+  // ── DESGLOSE POR TONELADA IMPRESO POR EL CÓDIGO (Liza no elige ni etiqueta números) ──
+  if(c.desglose_tn){
+    const numD = s => { const v = (typeof parseNum==='function') ? parseNum((''+s).replace(/[^\d.,-]/g,'')) : NaN; return isNaN(v)?0:v; };
+    const gvT = id => document.getElementById(id)?.textContent || '';
+    const tnN = numD(gvT('res_kilos'));
+    if(!(tnN>0)){
+      agregarMensaje('Todavía no hay una liquidación calculada para desglosar. Completá la operación y te paso el detalle por tonelada.', 'bot');
+      return;
+    }
+    // Mismas celdas espejo de la liquidación (las que alimentan el PDF) + la deuda
+    // pesificada por el propio motor (res_deuda). Acá solo se DIVIDE por las tn.
+    const brutoIVA = numD(gvT('c_bruto')) + numD(gvT('p_bruto'));
+    const deduc    = numD(gvT('c_total_ded')) + numD(gvT('p_total_ded'));
+    const reten    = numD(gvT('c_total_ret')) + numD(gvT('p_total_ret'));
+    const aPagar   = numD(gvT('c_total_pagar')) + numD(gvT('p_total_pagar'));
+    const deudaT   = numD(gvT('res_deuda'));
+    const recT     = numD(gvT('res_recibis'));
+    const fD = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
+    let msgD = 'Desglose por tonelada (sobre ' + gvT('res_kilos').trim() + ' tn), con las líneas de la liquidación:\n'
+      + '· Importe bruto (con IVA): ' + fD(brutoIVA/tnN) + ' /tn\n'
+      + '· Deducciones: ' + fD(deduc/tnN) + ' /tn\n'
+      + '· Retenciones: ' + fD(reten/tnN) + ' /tn\n'
+      + '· Total a pagar (neto de gastos, ANTES de la deuda): ' + fD(aPagar/tnN) + ' /tn\n'
+      + (deudaT>0 ? '· Va a la deuda: ' + fD(deudaT/tnN) + ' /tn (deuda total ' + fD(deudaT) + ')\n' : '')
+      + '· Lo que recibís: ' + fD(recT/tnN) + ' /tn\n'
+      + 'El flete y las condiciones de recibo ya están descontados dentro del precio.';
+    agregarMensaje(msgD, 'bot');
+    gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió el desglose por tonelada calculado por el código. NO repitas ni reinterpretes esos números. Si el usuario pregunta por otro valor por tonelada, mandá desglose_tn: true de nuevo.)'}]});
+    gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(desglose impreso por el sistema)'})}]});
     return;
   }
   // ── PDF DE CUALQUIER GRANO de la operación (usa las fotos guardadas por paso) ──
