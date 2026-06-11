@@ -3858,6 +3858,60 @@ Siempre confirmás el dato anterior y preguntás lo siguiente en una sola respue
 // vive en este único objeto: clasificación, system prompt, armado de consulta y
 // ruteo del resultado. Para ajustar cualquier cosa de búsqueda, tocar SOLO acá.
 // ============================================================================
+// ════════════════════════════════════════════════════════════════
+// TC DIVISA POR API DIRECTA (sin IA). El divisa del BNA ES el dólar mayorista
+// (el propio banco define su tabla de cierre de divisa como referencia del
+// mercado mayorista). Estas APIs públicas devuelven ese valor en JSON con
+// fecha: cero interpretación, cero modelo, el mismo número siempre.
+// Regla de negocio: antes de las 15 hs rige el CIERRE del día hábil anterior;
+// desde las 15, el valor del día. La búsqueda con Gemini queda de RESPALDO.
+// ════════════════════════════════════════════════════════════════
+async function buscarTCDirectoAPI(ahoraParam){
+  const fj = async (url)=>{
+    const r = await fetch(url, {headers:{'Accept':'application/json'}});
+    if(!r.ok) throw new Error('HTTP '+r.status+' en '+url);
+    return r.json();
+  };
+  // Sanidad del dato (aunque venga de API, no se carga nada fuera de rango)
+  const valida = (compra, venta)=>{
+    const c=Number(compra), v=Number(venta);
+    if(isNaN(c)||isNaN(v)||c<=500||v<=500||c>100000||v>100000) throw new Error('valores fuera de rango');
+    if(v<c) throw new Error('venta menor que compra');
+    if((v-c)/c > 0.05) throw new Error('brecha imposible para mayorista');
+    return {compra:c, venta:v};
+  };
+  const dd = d => ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
+  // Cierre de un día puntual (ArgentinaDatos, serie histórica)
+  const cierreDe = async (d, vigencia)=>{
+    const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), di=('0'+d.getDate()).slice(-2);
+    const j = await fj('https://api.argentinadatos.com/v1/cotizaciones/dolares/mayorista/'+y+'/'+m+'/'+di);
+    const vv = valida(j && j.compra, j && j.venta);
+    return Object.assign(vv, { fecha: dd(d), fuente:'ArgentinaDatos', vigencia: vigencia||'cierre del día hábil anterior' });
+  };
+  // Valor vigente intradiario (DolarApi)
+  const actual = async ()=>{
+    const j = await fj('https://dolarapi.com/v1/dolares/mayorista');
+    const vv = valida(j && j.compra, j && j.venta);
+    let ftxt = 'hoy';
+    if(j.fechaActualizacion){ const f=new Date(j.fechaActualizacion); if(!isNaN(f)) ftxt = dd(f); }
+    return Object.assign(vv, { fecha: ftxt, fuente:'DolarApi', vigencia:'valor del día' });
+  };
+  const ahora = ahoraParam || new Date();
+  if(ahora.getHours() < 15){
+    // Antes de las 15: cierre del día hábil anterior (retrocede fines de semana
+    // y feriados sin dato, hasta 6 intentos).
+    let d = new Date(ahora); d.setDate(d.getDate()-1);
+    for(let i=0; i<6; i++){
+      while(d.getDay()===0 || d.getDay()===6) d.setDate(d.getDate()-1);
+      try{ return await cierreDe(d); }
+      catch(e){ d.setDate(d.getDate()-1); }
+    }
+    return actual(); // la serie no respondió: al menos el valor vigente, con su fecha visible
+  }
+  try{ return await actual(); }
+  catch(e){ return cierreDe(new Date(ahora), 'cierre del día'); }
+}
+
 const BUSQUEDA_WEB = {
   // Clasifica qué tipo de búsqueda es, según la consulta que armó Liza.
   tipo(consulta){
@@ -4284,7 +4338,30 @@ function procesarRespuesta(texto){
         return;
       }
     }
-    // Resto de casos (TC u otros): Gemini como siempre.
+    // Si es el TIPO DE CAMBIO: PRIMERO la API directa de cotizaciones
+    // (determinística, sin IA). Solo si falla, Gemini con todas las vallas.
+    if(BUSQUEDA_WEB.tipo(c.buscar_web)==='tc'){
+      buscarTCDirectoAPI()
+        .then(r=>{
+          document.getElementById('gem-loading-web')?.remove();
+          setInputVal('tc', r.compra);
+          setInputVal('tc_vendedor', r.venta);
+          marcarCargado('tc','tc_vendedor');
+          if(typeof calcular==='function') calcular();
+          const f2 = n => n.toLocaleString('es-AR',{minimumFractionDigits:2, maximumFractionDigits:2});
+          const msgTC = 'Cargué el divisa del BNA (mayorista): compra $' + f2(r.compra) + ', venta $' + f2(r.venta) + ' — ' + r.vigencia + ', dato del ' + r.fecha + ' (' + r.fuente + '). ¿Te sirve?';
+          agregarMensaje(msgTC, 'bot');
+          // Que Liza sepa que el TC ya quedó cargado por la API (y no lo re-busque ni lo pise)
+          gemHistorial.push({role:'user', parts:[{text:'(Sistema: el tipo de cambio divisa se cargó por API directa, sin búsqueda con IA: compra '+r.compra+', venta '+r.venta+', dato del '+r.fecha+'. Ya está aplicado en tc y tc_vendedor: NO lo vuelvas a cargar ni lo busques de nuevo salvo que el usuario lo pida. Si el usuario pide buscarlo de nuevo, mandá buscar_web normalmente: la API va a devolver el mismo valor, que es la idea. Cuando el usuario confirme, seguí con la siguiente pregunta del flujo.)'}]});
+          gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje: msgTC})}]});
+        })
+        .catch(err=>{
+          console.log('[TC API] falló, usando fallback Gemini:', err && err.message ? err.message : err);
+          buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
+        });
+      return;
+    }
+    // Resto de casos: Gemini como siempre.
     buscarDatoWeb(c.buscar_web).then(finalizarBusqueda);
     return;
   }
