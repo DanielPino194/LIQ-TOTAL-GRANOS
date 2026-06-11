@@ -3466,6 +3466,28 @@ async function llamarGemini(texto){
     }
   }
 
+  // Desglose POR TONELADA (lo calcula el CÓDIGO con los totales reales; Liza tiene
+  // PROHIBIDO etiquetar un número con un concepto que no le corresponde).
+  let desglosePorTn = '';
+  if(hayCalculo && typeof parseNum==='function' && typeof pv==='function' && typeof ars==='function'){
+    const num = s => parseNum((''+s).replace(/[^\d.,-]/g,'')) || 0;
+    const tnN = num(resKilos);
+    if(tnN>0){
+      const brutoT = num(resNetoTotal);          // bruto total de la liquidación
+      const descT  = num(resGastosNeg);          // total descontado (gastos + deuda)
+      const recT   = num(resRecibis);            // lo que recibe el productor
+      const tcAct  = pv('tc')||0;
+      const deudaAplic = (pv('deuda_ars')||0) + (pv('deuda_usd')||0)*tcAct; // deuda cancelada, pesificada
+      const gastosT = Math.max(0, descT - deudaAplic); // gastos puros, sin deuda
+      const f = n => ars(Math.round(n));
+      desglosePorTn = '\n\nDESGLOSE POR TONELADA (calculado por el sistema; respondé SOLO con estos valores según lo que pidan. Si piden un corte que NO figura acá, decí que no lo tenés calculado: NUNCA respondas con otro número cambiándole la etiqueta):'
+        + '\n- BRUTO por tn (precio x TC x factor, sin descontar nada): ' + f(brutoT/tnN)
+        + '\n- GASTOS por tn (comisión, sellos, retenciones, flete y condiciones; SIN la deuda): ' + f(gastosT/tnN)
+        + '\n- NETO DE GASTOS por tn (bruto menos gastos, ANTES de aplicar la deuda): ' + f((recT + deudaAplic)/tnN)
+        + '\n- NETO FINAL por tn (lo que recibe el productor, después de gastos Y deuda): ' + f(recT/tnN);
+    }
+  }
+
   // Bloque de resultados calculados para inyectar en el prompt
   const bloqueResultados = hayCalculo
     ? 'RESULTADOS CALCULADOS (usá estos para responder al usuario):'
@@ -3480,6 +3502,7 @@ async function llamarGemini(texto){
     + '\n- Total descontado (gastos+deuda): ' + resGastosNeg
     + '\n- LO QUE RECIBE EL PRODUCTOR: ' + resRecibis
     + (porTonelada ? '\n- Lo que recibe POR TONELADA: ' + porTonelada : '')
+    + desglosePorTn
     + '\n\nREPARTO DE TONELADAS (importante para explicar la liquidación):'
     + '\n- Toneladas totales necesarias: ' + resKilos + ' tn'
     + '\n- Toneladas que van a CANJE (cancelan la deuda en dólares y pesos + gastos): ' + resCanjeKilos
@@ -3657,7 +3680,7 @@ Operación POR MONTOS: dos o más granos, cada uno cubre un monto fijo que dijo 
 2) El sistema carga el primer grano y <que_hacer_ahora> te dice qué preguntar. Por cada grano, UNO por turno: precio, tipo de cambio (solo la primera vez; en los granos siguientes se hereda), comisión, factor, recibo. NUNCA mandes mostrar_resultado en esta operación.
 3) Cuando terminaste las condiciones de un grano (o el usuario dijo "así está bien"), mandá "op_montos_siguiente": true. El SISTEMA calcula y dice las toneladas necesarias, y ofrece el PDF de ESE grano.
 4) Si el usuario quiere el PDF, mandá "generar_pdf". Cuando quiera seguir (o diga que no quiere el PDF), mandá "op_montos_continuar": true y el sistema carga el grano siguiente.
-5) Después del último grano, el SISTEMA arma el resumen completo de la operación. Los PDF son SIEMPRE de un solo grano (nunca mezclan granos ni canje con pago); el resumen del chat es el que narra la operación entera.
+5) Después del último grano, el SISTEMA arma el resumen completo de la operación. Los PDF son SIEMPRE de un solo grano (nunca mezclan granos ni canje con pago); el resumen del chat es el que narra la operación entera. Cerrada la operación, el único PDF disponible es el del ÚLTIMO grano: si piden el de un grano anterior, explicá que ya no está cargado y que se pide al cerrar cada paso.
 </flujo_montos>
 
 <buscar_web>
@@ -3669,7 +3692,9 @@ Si el sistema no pudo confirmar el divisa (o solo halló el billete), avisá que
 </buscar_web>
 
 <generar_pdf>
-Cuando el usuario pida PDF ("pasame el pdf", "dale" cuando venís ofreciéndolo, "el comprobante"), mandá "generar_pdf": "resumen" (o "canje"/"pago"). Decirlo en el mensaje NO alcanza: sin el campo no se descarga.
+Cuando el usuario pida PDF ("pasame el pdf", "el comprobante"), mandá "generar_pdf": "resumen" (o "canje"/"pago" si especifica). Decirlo en el mensaje NO alcanza: sin el campo no se descarga.
+REGLA DE ORO DEL PDF: si VOS ofreciste el PDF y el usuario responde "sí", "dale", "ok" o similar, mandá "generar_pdf" EN ESE MISMO turno. PROHIBIDO volver a preguntar si quiere el PDF: ya dijo que sí.
+El PDF es SIEMPRE del grano cargado AHORA en la app. Si piden el PDF de un grano de un paso anterior (operación por montos o compleja), NO prometas generarlo: esos datos ya no están. Explicá que el PDF de cada grano se pide al cerrar ese paso, y ofrecé el del grano actual.
 </generar_pdf>
 
 <reiniciar>
@@ -4478,6 +4503,17 @@ function procesarRespuesta(texto){
   agregarMensaje(msg,'bot');
   // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
   if(c.generar_pdf){
+    // Integridad en operación por montos: el PDF SOLO puede ser del grano cargado.
+    // Los datos de pasos anteriores ya no existen: avisarlo, nunca entregar un PDF
+    // con datos de otro grano haciéndolo pasar por el pedido.
+    if(opMontos && opMontos.activa){
+      const perdidos = opMontos.resumenes.length - ((opMontos.cerrada || opMontos.esperandoAvance) ? 1 : 0);
+      if(perdidos > 0){
+        const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+        const granoAct = document.getElementById('grano')?.value;
+        agregarMensaje('Ojo: este PDF es de ' + (glMap[granoAct]||granoAct) + ', que es el grano cargado ahora. Los datos de los granos anteriores ya no están en la app; el PDF de cada grano se genera al cerrar ese paso, antes de seguir.', 'bot');
+      }
+    }
     let tipo = (''+c.generar_pdf).toLowerCase();
     if(tipo!=='canje' && tipo!=='pago') tipo='resumen';
     // Verificar que el USUARIO haya cargado datos reales (no los defaults de la app).
