@@ -4069,9 +4069,13 @@ function procesarRespuesta(texto){
     const el = document.getElementById(id);
     const actual = el ? parseNum(el.value) : 0;
     const nuevo = parseFloat(valorNuevo);
-    // Si ya hay un valor cargado y el nuevo es 0/NaN, es un reenvío redundante: ignorar.
-    if(actual > 0 && (isNaN(nuevo) || nuevo === 0)) return;
+    // Si ya hay un valor cargado y el nuevo es 0/NaN, es un reenvío redundante: ignorar
+    // (pero asegurar la marca: el valor real sigue ahí).
+    if(actual > 0 && (isNaN(nuevo) || nuevo === 0)){ marcarCargado(id); return; }
     setInputVal(id, valorNuevo);
+    // BUG FIX: los montos nunca se marcaban como cargados, y la máquina de estados
+    // le pedía a Liza re-preguntar la deuda al final de las operaciones simples.
+    if(!isNaN(nuevo) && nuevo > 0) marcarCargado(id);
   }
 
   // Aplica al formulario todos los campos "básicos" de carga que vengan en c.
