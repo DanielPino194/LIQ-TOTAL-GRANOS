@@ -3768,6 +3768,10 @@ Operación POR MONTOS: dos o más granos, cada uno cubre un monto fijo que dijo 
 6) EDICIÓN (solo con la operación cerrada): si quiere CAMBIAR algo de un grano (precio, comisión, condiciones), mandá "op_montos_editar": "<grano>". El sistema vuelve a ese paso; aplicá los cambios como campos normales, y cuando el usuario diga que está listo mandá "op_montos_actualizar": true. El sistema recalcula y rearma el resumen completo.
 </flujo_montos>
 
+<montos_relativos>
+"El resto", "el saldo", "lo que sobra" NO son montos cargables y en una operación SIMPLE no existen. Si el usuario dice "cancelo X y cobro el resto": el resto sale de las TONELADAS. Preguntale cuántas toneladas tiene y pasá a modo kilos ("modo":"kilos" + "k_total"): ahí la app muestra lo que recibe después de cancelar la deuda. Si no tiene una cantidad de toneladas, pedile el monto concreto a cobrar. NUNCA respondas "Entendido" a un monto relativo sin cargar nada ni pedir el dato que falta.
+</montos_relativos>
+
 <buscar_web>
 Si el usuario pide un dato que cambia a diario (dólar BNA, pizarra), mandá "buscar_web": "la consulta".
 Mensaje: "Dame un segundo que lo busco."
@@ -3958,6 +3962,7 @@ const BUSQUEDA_WEB = {
       + 'DIVISA: compra $Z, venta $W\n'
       + 'y recién DESPUÉS, en una línea aparte, la FECHA del dato y la fuente. NO pongas la fecha ni ningún otro número entre la etiqueta y sus dos valores.\n'
       + '- Si solo encontrás UNA de las dos cotizaciones, devolvé esa con su etiqueta correcta y aclará que la otra no la encontraste. NUNCA etiquetes como DIVISA un valor que corresponde al billete: ante la duda, etiquetalo BILLETE.\n'
+      + '- PROHIBIDO devolver CCL, contado con liquidación, MEP, dólar bolsa, blue, cripto, tarjeta, turista, solidario o ahorro: NO son el divisa aunque tengan brecha chica. El divisa/mayorista del BNA vale PARECIDO al billete (queda entre su compra y su venta); los dólares financieros valen distinto. Si la página lista varios dólares, ignorá todos menos el billete del BNA y el divisa/mayorista.\n'
       + 'DISTANCIAS entre localidades argentinas:\n'
       + '- Devolvé los KILÓMETROS por RUTA (camino real para auto/camión), NO la distancia en línea recta.\n'
       + '- Usá sitios argentinos de cálculo de rutas (ruta0.com, rutadistancia.com.ar, calcularruta.com, derutasydestinos y similares).\n'
@@ -4004,13 +4009,22 @@ const BUSQUEDA_WEB = {
 
       // Por cada aparición de la etiqueta, toma los DOS primeros números válidos que
       // le siguen (los de la fecha/hora quedan filtrados por esTC). Devuelve candidatos.
+      // Tipos de dólar que NO son el divisa: si aparecen entre la etiqueta y los
+      // números, el par se descarta (CCL y MEP tienen brechas de centavos y le
+      // "ganarían" al mayorista con el criterio de menor brecha).
+      const MALOS_TIPOS = /\b(ccl|mep)\b|contado\s+con\s+liq|bolsa|blue|cripto|tarjeta|turista|solidario|ahorro|euro/i;
       const paresTrasEtiqueta = (re)=>{
         const pares = []; let m;
         while((m = re.exec(resultado)) !== null){
-          const crudos = (resultado.slice(m.index + m[0].length).match(/\d[\d.,]*\d|\d/g) || [])
-            .map(parseNum).filter(esTC);
-          if(crudos.length>=2){
-            pares.push([Math.min(crudos[0],crudos[1]), Math.max(crudos[0],crudos[1])]);
+          const resto = resultado.slice(m.index + m[0].length);
+          const reNum = /\d[\d.,]*\d|\d/g;
+          let mn, encontrados = [], finSeg = 0;
+          while((mn = reNum.exec(resto)) !== null && encontrados.length < 2){
+            const val = parseNum(mn[0]);
+            if(esTC(val)){ encontrados.push(val); finSeg = mn.index + mn[0].length; }
+          }
+          if(encontrados.length >= 2 && !MALOS_TIPOS.test(resto.slice(0, finSeg))){
+            pares.push([Math.min(encontrados[0],encontrados[1]), Math.max(encontrados[0],encontrados[1])]);
           }
         }
         return pares;
@@ -4037,10 +4051,17 @@ const BUSQUEDA_WEB = {
         }
       }
 
-      // VALIDACIÓN FINAL: el par elegido debe tener brecha chica y no ser el billete.
+      // VALIDACIÓN FINAL: brecha chica, distinto del billete, Y ANCLADO al billete.
+      // El divisa real vive pegado al billete (el mayorista queda ENTRE su compra y
+      // su venta); CCL/MEP/blue quedan afuera de ese rango. Sin billete presente
+      // no hay ancla y NO se confirma automáticamente: va a carga manual.
+      const anclaOK = parBillete && parDivisa
+        && parDivisa[0] >= parBillete[0]*0.98
+        && parDivisa[1] <= parBillete[1]*1.02;
       const divisaConfirmado = parDivisa
         && brechaRel(parDivisa) <= MAX_BRECHA
-        && !(parBillete && parDivisa[0]===parBillete[0] && parDivisa[1]===parBillete[1]);
+        && anclaOK
+        && !(parDivisa[0]===parBillete[0] && parDivisa[1]===parBillete[1]);
 
       if(divisaConfirmado){
         const fmt = n => n.toLocaleString('es-AR',{minimumFractionDigits:2, maximumFractionDigits:2});
