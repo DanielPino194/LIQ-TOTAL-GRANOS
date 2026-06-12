@@ -3268,12 +3268,6 @@ function flujoEstado(){
 
   // ---- OPERACIÓN SIMPLE ----
   if(!cargado('grano')) return est('S_GRANO', 'Falta el grano. Preguntá qué grano va a vender. Cargá "grano".');
-  // CANJE SIN DEUDA: el canje cancela una deuda; sin deuda el reparto da CERO.
-  const destSel = (typeof dest!=='undefined') ? dest : 'auto';
-  const hayDeudaCargada = ((typeof pv==='function') && ((pv('deuda_usd')||0)>0 || (pv('deuda_ars')||0)>0));
-  if(destSel==='canje' && !hayDeudaCargada){
-    return est('S_CANJE_SIN_DEUDA', 'El destino está en CANJE pero NO hay deuda cargada, y el canje cancela una deuda: así el resultado da cero. Preguntá cuánto cancela (cargá "deuda_usd" o "deuda_ars"). Si en realidad no cancela nada, mandá "dest": "auto".');
-  }
   if(esImporte){
     const hayMonto = cargado('deuda_usd')||cargado('deuda_ars')||cargado('cobrar_usd')||cargado('cobrar_ars');
     if(!hayMonto) return est('S_MONTO', 'Falta el monto a cubrir. Preguntá cuánto debe cancelar o cobrar. Cargá deuda_/cobrar_.');
@@ -3559,10 +3553,8 @@ async function llamarGemini(texto){
   let desglosePorTn = '';
   if(hayCalculo){
     desglosePorTn = '\n\nVALORES POR TONELADA: ante CUALQUIER pregunta de valores por tonelada, mandá la clave "desglose_tn" y NADA más; el sistema imprime el valor. PROHIBIDO responder vos con un número: NO los tenés. Mandá la LÍNEA que corresponde a la pregunta:'
-      + '\n- "libre de gastos", "neto de gastos", "descontando los gastos", "cuánto me queda" → "desglose_tn": "neto_gastos"'
-      + '\n- "cuánto va a la deuda", "cuánto cancela", "cuánto cubro" → "desglose_tn": "deuda"'
-      + '\n- "cuánto queda sin cubrir", "cuánto me falta", "el saldo de la deuda" → "desglose_tn": "saldo_sin_cubrir"'
-      + '\n- "total a pagar de la liquidación" → "a_pagar" · "los gastos de recibo / fletes" → "gastos_recibo"'
+      + '\n- "cuánto me queda libre (de gastos) para la deuda", "cuánto va a la deuda" → "desglose_tn": "deuda"'
+      + '\n- "cuánto queda antes de la deuda", "neto de gastos", "total a pagar" → "desglose_tn": "a_pagar"'
       + '\n- "cuánto recibo / me queda en mano / en el bolsillo" → "desglose_tn": "recibis"'
       + '\n- "el bruto" → "desglose_tn": "bruto" · "el IVA" → "iva" · "las deducciones" → "deducciones" · "las retenciones" → "retenciones"'
       + '\n- "el detalle", "el desglose completo", o si la pregunta es ambigua → "desglose_tn": true (tabla completa).';
@@ -4444,7 +4436,6 @@ function procesarRespuesta(texto){
     // pesificada por el propio motor (res_deuda). Acá solo se DIVIDE por las tn.
     // Espejo LITERAL del panel de la liquidación, línea por línea (cada valor es
     // la celda real dividida por las toneladas: verificable contra la pantalla).
-    const gastosRecibo = numD(gvT('res_gastos')); // gastos de recibo + fletes, c/IVA (celda real del panel)
     const bruto    = numD(gvT('c_bruto')) + numD(gvT('p_bruto'));
     const iva      = numD(gvT('c_iva')) + numD(gvT('p_iva'));
     const deduc    = numD(gvT('c_total_ded')) + numD(gvT('p_total_ded'));
@@ -4453,40 +4444,23 @@ function procesarRespuesta(texto){
     const deudaT   = numD(gvT('res_deuda'));
     const recT     = numD(gvT('res_recibis'));
     const fD = n => (typeof ars==='function') ? ars(Math.round(n)||0) : (Math.round(n)||0);
-    // COBERTURA PARCIAL: recibís negativo = la deuda no se cubre entera.
-    // El negativo ES el saldo sin cubrir; lo que va a la deuda es lo cubierto.
-    const tcVdes = (typeof pv==='function') ? (pv('tc_vendedor')||0) : 0;
-    const parcial = (recT < 0 && deudaT > 0);
-    const cubierto = parcial ? (deudaT + recT) : deudaT;
-    const saldoSin = parcial ? -recT : 0;
-    const fUSD = n => Math.round(n).toLocaleString('es-AR') + ' USD';
     // Selector de línea: si Liza manda una línea puntual, el código imprime SOLO esa
     // (con su etiqueta honesta puesta por el código: una clasificación errada se ve
     // al instante y se corrige con una palabra). Cualquier otro valor → tabla completa.
     const lineasTn = {
-      bruto:        ['Importe bruto (sin IVA)', bruto],
-      iva:          ['IVA (10,5%)', iva],
-      deducciones:  ['Total deducciones', deduc],
-      retenciones:  ['Total retenciones', reten],
-      a_pagar:      ['Total a pagar de la liquidación (sin gastos de recibo ni deuda)', aPagar],
-      gastos_recibo:['Gastos de recibo y fletes (c/IVA)', gastosRecibo],
-      neto_gastos:  ['NETO de todos los gastos (lo que queda antes de la deuda)', recT + deudaT],
-      deuda:        [parcial ? 'Va a la deuda (lo que CUBRÍS con estas toneladas)' : 'Va a la deuda', cubierto],
-      recibis:      ['Lo que recibís', parcial ? 0 : recT]
+      bruto:       ['Importe bruto (sin IVA)', bruto],
+      iva:         ['IVA (10,5%)', iva],
+      deducciones: ['Total deducciones', deduc],
+      retenciones: ['Total retenciones', reten],
+      a_pagar:     ['Total a pagar (antes de aplicar la deuda)', aPagar],
+      deuda:       ['Va a la deuda', deudaT],
+      recibis:     ['Lo que recibís', recT]
     };
-    // El saldo sin cubrir es un TOTAL (no tiene sentido por tonelada): caso aparte.
-    if(parcial && typeof c.desglose_tn==='string' && c.desglose_tn.toLowerCase().trim()==='saldo_sin_cubrir'){
-      agregarMensaje('SALDO de deuda SIN cubrir: ' + fD(saldoSin) + (tcVdes>0 ? ' (unos ' + fUSD(saldoSin/tcVdes) + ' al vendedor)' : '') + '. Con las ' + gvT('res_kilos').trim() + ' tn cubrís ' + fD(cubierto) + ' de la deuda total de ' + fD(deudaT) + '.', 'bot');
-      gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió el saldo sin cubrir, calculado por el código. NO repitas ni reinterpretes el número.)'}]});
-      gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(saldo impreso por el sistema)'})}]});
-      return;
-    }
     const pedidoTn = (typeof c.desglose_tn==='string') ? c.desglose_tn.toLowerCase().trim() : '';
     if(lineasTn[pedidoTn]){
       const lblTn = lineasTn[pedidoTn][0], valTn = lineasTn[pedidoTn][1];
       agregarMensaje(lblTn + ': ' + fD(valTn/tnN) + ' por tonelada'
-        + (pedidoTn==='deuda' && deudaT>0 ? ' (deuda total ' + fD(deudaT) + (parcial ? '; queda un saldo SIN cubrir de ' + fD(saldoSin) + (tcVdes>0 ? ', unos ' + fUSD(saldoSin/tcVdes) : '') : '') + ')' : '')
-        + (pedidoTn==='recibis' && parcial ? ' (la deuda no llega a cubrirse con estas toneladas)' : '')
+        + (pedidoTn==='deuda' && deudaT>0 ? ' (deuda total ' + fD(deudaT) + ')' : '')
         + '. Si querés el desglose completo, pedime el detalle.', 'bot');
       gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió la línea "'+lblTn+'" del desglose, calculada por el código. NO repitas ni reinterpretes el número. Si el usuario quiere otra línea, mandá desglose_tn con esa línea; si quiere todo, desglose_tn: true.)'}]});
       gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(línea impresa por el sistema)'})}]});
@@ -4497,13 +4471,10 @@ function procesarRespuesta(texto){
       + '· IVA (10,5%): ' + fD(iva/tnN) + ' /tn\n'
       + '· Total deducciones: ' + fD(deduc/tnN) + ' /tn\n'
       + '· Total retenciones: ' + fD(reten/tnN) + ' /tn\n'
-      + '· Total a pagar de la liquidación: ' + fD(aPagar/tnN) + ' /tn\n'
-      + (gastosRecibo>0 ? '· Gastos de recibo y fletes (c/IVA): ' + fD(gastosRecibo/tnN) + ' /tn\n' : '')
-      + '· NETO de todos los gastos (antes de la deuda): ' + fD((recT+deudaT)/tnN) + ' /tn\n'
-      + (deudaT>0 ? '· Va a la deuda' + (parcial?' (lo que cubrís)':'') + ': ' + fD(cubierto/tnN) + ' /tn (cubre ' + fD(cubierto) + ' de ' + fD(deudaT) + ')\n' : '')
-      + (parcial ? '· SALDO de deuda SIN cubrir: ' + fD(saldoSin) + (tcVdes>0 ? ' (unos ' + fUSD(saldoSin/tcVdes) + ' al vendedor)' : '') + '\n' : '')
-      + '· Lo que recibís: ' + (parcial ? fD(0) + ' (la deuda no llega a cubrirse)' : fD(recT/tnN) + ' /tn') + '\n'
-      + 'Cada línea es una celda del panel de la liquidación dividida por las toneladas.';
+      + '· Total a pagar (lo que queda ANTES de aplicar la deuda): ' + fD(aPagar/tnN) + ' /tn\n'
+      + (deudaT>0 ? '· Va a la deuda: ' + fD(deudaT/tnN) + ' /tn (deuda total ' + fD(deudaT) + ')\n' : '')
+      + '· Lo que recibís: ' + fD(recT/tnN) + ' /tn\n'
+      + 'El flete, las condiciones de recibo y la merma por humedad ya están adentro de estos valores; cada línea coincide con el panel de la liquidación dividido por las toneladas.';
     agregarMensaje(msgD, 'bot');
     gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió el desglose por tonelada calculado por el código. NO repitas ni reinterpretes esos números. Si el usuario pregunta por otro valor por tonelada, mandá desglose_tn: true de nuevo.)'}]});
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(desglose impreso por el sistema)'})}]});
@@ -4854,25 +4825,6 @@ function procesarRespuesta(texto){
   const gv = id => document.getElementById(id)?.textContent?.trim() || '';
   const recibisReal = gv('res_recibis');
   const tnReal = gv('res_kilos');
-  // COBERTURA PARCIAL: si "recibís" da negativo, la deuda NO se cubre con estas
-  // toneladas. El número negativo ES el saldo sin cubrir: traducirlo a lenguaje
-  // de negocio en vez de mostrar un "recibís" absurdo.
-  const coberturaParcial = (()=>{
-    if(typeof parseNum!=='function') return null;
-    const nrm = s => { const v = parseNum((''+s).replace(/[^\d.,-]/g,'')); return isNaN(v)?0:v; };
-    const rec = nrm(recibisReal);
-    if(rec >= 0) return null;
-    const deudaTot = nrm(gv('res_deuda'));
-    if(deudaTot <= 0) return null;
-    const saldoSin = -rec;
-    const cubierto = deudaTot - saldoSin;
-    const tcV = (typeof pv==='function') ? (pv('tc_vendedor')||0) : 0;
-    const fmtC = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
-    const fmtU = n => Math.round(n).toLocaleString('es-AR');
-    return 'Con ' + tnReal + ' tn cubrís ' + fmtC(cubierto) + ' de la deuda. '
-      + 'Queda un SALDO SIN CUBRIR de ' + fmtC(saldoSin)
-      + (tcV>0 ? ' (unos ' + fmtU(saldoSin/tcV) + ' USD al vendedor)' : '') + '.';
-  })();
 
   const enOpComplejaPaso1 = opCompleja && opCompleja.activa && opCompleja.paso===1 && window._lastCalc;
 
@@ -4884,8 +4836,6 @@ function procesarRespuesta(texto){
       const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
       if(esImporte){
         msg = 'Necesitás ' + tnReal + ' tn para cubrir lo que pediste. ¿Querés que ajuste algo o te paso el detalle?';
-      } else if(coberturaParcial){
-        msg = 'Listo. ' + coberturaParcial + ' Si querés te paso el detalle.';
       } else {
         msg = 'Listo. Cobrás aproximadamente ' + recibisReal + ' en total. Si querés te detallo el cálculo.';
       }
@@ -4897,8 +4847,6 @@ function procesarRespuesta(texto){
     const esImporte = document.getElementById('mode_importe')?.classList.contains('active');
     if(esImporte){
       msg = msg + '\n\nNecesitás ' + tnReal + ' tn para cubrir lo que pediste.';
-    } else if(coberturaParcial){
-      msg = msg + '\n\nResultado actualizado: ' + coberturaParcial;
     } else {
       msg = msg + '\n\nResultado actualizado: por ' + tnReal + ' tn, lo que recibís es ' + recibisReal + '.';
     }
