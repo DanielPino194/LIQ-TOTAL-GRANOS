@@ -3553,8 +3553,9 @@ async function llamarGemini(texto){
   let desglosePorTn = '';
   if(hayCalculo){
     desglosePorTn = '\n\nVALORES POR TONELADA: ante CUALQUIER pregunta de valores por tonelada, mandá la clave "desglose_tn" y NADA más; el sistema imprime el valor. PROHIBIDO responder vos con un número: NO los tenés. Mandá la LÍNEA que corresponde a la pregunta:'
-      + '\n- "cuánto me queda libre (de gastos) para la deuda", "cuánto va a la deuda" → "desglose_tn": "deuda"'
-      + '\n- "cuánto queda antes de la deuda", "neto de gastos", "total a pagar" → "desglose_tn": "a_pagar"'
+      + '\n- "libre de gastos", "neto de gastos", "descontando los gastos", "cuánto me queda" → "desglose_tn": "neto_gastos"'
+      + '\n- "cuánto va a la deuda", "cuánto cancela de deuda" → "desglose_tn": "deuda"'
+      + '\n- "total a pagar de la liquidación" → "a_pagar" · "los gastos de recibo / fletes" → "gastos_recibo"'
       + '\n- "cuánto recibo / me queda en mano / en el bolsillo" → "desglose_tn": "recibis"'
       + '\n- "el bruto" → "desglose_tn": "bruto" · "el IVA" → "iva" · "las deducciones" → "deducciones" · "las retenciones" → "retenciones"'
       + '\n- "el detalle", "el desglose completo", o si la pregunta es ambigua → "desglose_tn": true (tabla completa).';
@@ -4436,6 +4437,7 @@ function procesarRespuesta(texto){
     // pesificada por el propio motor (res_deuda). Acá solo se DIVIDE por las tn.
     // Espejo LITERAL del panel de la liquidación, línea por línea (cada valor es
     // la celda real dividida por las toneladas: verificable contra la pantalla).
+    const gastosRecibo = numD(gvT('res_gastos')); // gastos de recibo + fletes, c/IVA (celda real del panel)
     const bruto    = numD(gvT('c_bruto')) + numD(gvT('p_bruto'));
     const iva      = numD(gvT('c_iva')) + numD(gvT('p_iva'));
     const deduc    = numD(gvT('c_total_ded')) + numD(gvT('p_total_ded'));
@@ -4448,13 +4450,15 @@ function procesarRespuesta(texto){
     // (con su etiqueta honesta puesta por el código: una clasificación errada se ve
     // al instante y se corrige con una palabra). Cualquier otro valor → tabla completa.
     const lineasTn = {
-      bruto:       ['Importe bruto (sin IVA)', bruto],
-      iva:         ['IVA (10,5%)', iva],
-      deducciones: ['Total deducciones', deduc],
-      retenciones: ['Total retenciones', reten],
-      a_pagar:     ['Total a pagar (antes de aplicar la deuda)', aPagar],
-      deuda:       ['Va a la deuda', deudaT],
-      recibis:     ['Lo que recibís', recT]
+      bruto:        ['Importe bruto (sin IVA)', bruto],
+      iva:          ['IVA (10,5%)', iva],
+      deducciones:  ['Total deducciones', deduc],
+      retenciones:  ['Total retenciones', reten],
+      a_pagar:      ['Total a pagar de la liquidación (sin gastos de recibo ni deuda)', aPagar],
+      gastos_recibo:['Gastos de recibo y fletes (c/IVA)', gastosRecibo],
+      neto_gastos:  ['NETO de todos los gastos (lo que queda antes de la deuda)', recT + deudaT],
+      deuda:        ['Va a la deuda', deudaT],
+      recibis:      ['Lo que recibís', recT]
     };
     const pedidoTn = (typeof c.desglose_tn==='string') ? c.desglose_tn.toLowerCase().trim() : '';
     if(lineasTn[pedidoTn]){
@@ -4471,10 +4475,12 @@ function procesarRespuesta(texto){
       + '· IVA (10,5%): ' + fD(iva/tnN) + ' /tn\n'
       + '· Total deducciones: ' + fD(deduc/tnN) + ' /tn\n'
       + '· Total retenciones: ' + fD(reten/tnN) + ' /tn\n'
-      + '· Total a pagar (lo que queda ANTES de aplicar la deuda): ' + fD(aPagar/tnN) + ' /tn\n'
+      + '· Total a pagar de la liquidación: ' + fD(aPagar/tnN) + ' /tn\n'
+      + (gastosRecibo>0 ? '· Gastos de recibo y fletes (c/IVA): ' + fD(gastosRecibo/tnN) + ' /tn\n' : '')
+      + '· NETO de todos los gastos (antes de la deuda): ' + fD((recT+deudaT)/tnN) + ' /tn\n'
       + (deudaT>0 ? '· Va a la deuda: ' + fD(deudaT/tnN) + ' /tn (deuda total ' + fD(deudaT) + ')\n' : '')
       + '· Lo que recibís: ' + fD(recT/tnN) + ' /tn\n'
-      + 'El flete, las condiciones de recibo y la merma por humedad ya están adentro de estos valores; cada línea coincide con el panel de la liquidación dividido por las toneladas.';
+      + 'Cada línea es una celda del panel de la liquidación dividida por las toneladas.';
     agregarMensaje(msgD, 'bot');
     gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió el desglose por tonelada calculado por el código. NO repitas ni reinterpretes esos números. Si el usuario pregunta por otro valor por tonelada, mandá desglose_tn: true de nuevo.)'}]});
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(desglose impreso por el sistema)'})}]});
