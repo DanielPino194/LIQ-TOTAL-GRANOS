@@ -3622,6 +3622,14 @@ async function llamarGemini(texto){
         + '\n- Seguí EXACTAMENTE lo que dice <que_hacer_ahora>. NO uses claves op_compleja_* en esta operación.';
     }
   }
+  // Búsquedas en vuelo: que Liza NUNCA rellene el hueco con un dato inventado
+  let bloqueBusqueda = '';
+  if(window._busquedaEnCurso){
+    const segB = Math.round((Date.now() - window._busquedaEnCurso.desde)/1000);
+    bloqueBusqueda = segB > 120
+      ? '\n\nBÚSQUEDA CAÍDA: la búsqueda de "' + window._busquedaEnCurso.consulta + '" se disparó hace más de 2 minutos y no devolvió resultado. Pedí disculpas y mandá "buscar_web" DE NUEVO con esa misma consulta.'
+      : '\n\nBÚSQUEDA EN CURSO: "' + window._busquedaEnCurso.consulta + '" todavía NO devolvió resultado. PROHIBIDO cargar, confirmar o inventar ese dato (km, tipo de cambio, lo que sea). Si el usuario apura o dice "seguimos", decile que el dato está en camino y esperá.';
+  }
 
   const sistema = `
 <identidad>
@@ -3800,7 +3808,7 @@ CONFIRMACIÓN: al confirmar un flete decí SIEMPRE cuál cargaste y cómo: "carg
 <estado_actual>
 Lo que marca "(falta, preguntar)" NO lo dio el usuario: preguntalo, no lo inventes.
 DATOS: grano=${granoActual}, toneladas=${kActual}, precio=${precioActual}, factor=${factorActual}, comision=${comActual}, TC=${tcActual}, flete_corto=${fleteCortoActual}, flete_largo=${fleteLargoActual}.
-${bloqueResultados}${bloqueOpCompleja}
+${bloqueResultados}${bloqueOpCompleja}${bloqueBusqueda}
 </estado_actual>
 
 <que_hacer_ahora>
@@ -4193,6 +4201,23 @@ function procesarRespuesta(texto){
   }
   const c = obj.campos || {};
 
+  // ── CANDADO ANTI-NARRACIÓN DE BÚSQUEDA ──
+  // Si Liza dice que va a buscar pero NO mandó "buscar_web" (le pasa cuando el
+  // mismo turno trae también campos para cargar), el sistema la obliga a mandar
+  // la clave en el acto. Un solo reintento automático, invisible para el usuario.
+  if(!c.buscar_web && obj.mensaje && /dame un segundo|ahí (te )?lo busco|busco (de nuevo|nuevamente)/i.test(obj.mensaje)){
+    if(!window._reintentoBusqueda){
+      window._reintentoBusqueda = true;
+      aplicarCamposBasicos(c); // los campos que sí vinieron en este turno se aplican igual
+      agregarMensaje(obj.mensaje, 'bot');
+      gemHistorial.push({role:'model', parts:[{text: JSON.stringify(obj)}]});
+      gemSend('(Sistema: dijiste que ibas a buscar pero NO mandaste la clave "buscar_web", así que NINGUNA búsqueda se disparó. Mandá AHORA un JSON con "buscar_web" y la consulta que corresponde, con mensaje vacío.)', true);
+      return;
+    }
+  } else if(!c.buscar_web) {
+    window._reintentoBusqueda = false;
+  }
+
   // ── Marcar campos opcionales como "ya preguntados" según el estado del flujo ──
   // Esto avanza la máquina de estados: una vez preguntado factor/recibo, no se vuelve a pedir.
   const _est = (typeof flujoEstado==='function') ? flujoEstado().estado : '';
@@ -4312,10 +4337,14 @@ function procesarRespuesta(texto){
     loading.id='gem-loading-web';
     document.getElementById('gem-msgs').appendChild(loading);
     scrollMsgs();
+    // Búsqueda en vuelo: mientras no vuelva, Liza tiene PROHIBIDO inventar el dato
+    window._busquedaEnCurso = { consulta: ''+c.buscar_web, desde: Date.now() };
+    window._reintentoBusqueda = false;
 
     // Si es una distancia, intentamos PRIMERO Google Maps (número exacto).
     // Si Maps falla (sin key, sin ruta, error o cupo agotado), caemos a Gemini.
     const finalizarBusqueda = (resultado)=>{
+      window._busquedaEnCurso = null;
       document.getElementById('gem-loading-web')?.remove();
       const aviso = BUSQUEDA_WEB.rutearResultado(c.buscar_web, resultado);
       gemSend(aviso, true);
@@ -4343,6 +4372,7 @@ function procesarRespuesta(texto){
     if(BUSQUEDA_WEB.tipo(c.buscar_web)==='tc'){
       buscarTCDirectoAPI()
         .then(r=>{
+          window._busquedaEnCurso = null;
           document.getElementById('gem-loading-web')?.remove();
           setInputVal('tc', r.compra);
           setInputVal('tc_vendedor', r.venta);
