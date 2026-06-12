@@ -3206,7 +3206,7 @@ function flujoEstado(){
     const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
     if(opMontos.editandoIdx!=null){
       const re = opMontos.resumenes[opMontos.editandoIdx];
-      return est('M_EDIT', 'El usuario está EDITANDO el paso de '+(granoLbl[re.grano]||re.grano)+' (cubre '+re.montoTxt+'). Los cambios que pida (precio, comisión, factor, recibo) mandalos como campos normales. Cuando diga que está listo / ya está / nada más, mandá "op_montos_actualizar": true. NO mandes op_montos_siguiente ni mostrar_resultado.');
+      return est('M_EDIT', 'El usuario está EDITANDO el paso de '+(granoLbl[re.grano]||re.grano)+' (cubre '+re.montoTxt+'). Los cambios que pida (precio, comisión, factor, recibo) mandalos como campos normales. Cuando diga que está listo / ya está / nada más, mandá "op_montos_actualizar": true junto con el último campo si lo dio recién. NO vuelvas a mandar op_montos_editar: ya estás en edición. NO mandes op_montos_siguiente ni mostrar_resultado.');
     }
     if(opMontos.cerrada){
       return est('M_CERRADO', 'La operación por montos está COMPLETA. El último grano sigue cargado en la app. PDF del grano cargado: "generar_pdf". PDF de OTRO grano de la operación: "pdf_grano": "<grano>". Para CAMBIAR algo de cualquier grano: "op_montos_editar": "<grano>". Los PDF nunca mezclan granos.');
@@ -3230,7 +3230,7 @@ function flujoEstado(){
   // ---- OPERACIÓN COMPLEJA ----
   if(opCompleja && opCompleja.activa){
     if(opCompleja.editando){
-      return est('C_EDIT', 'El usuario está EDITANDO el paso '+opCompleja.editando+' de la operación compleja cerrada. Los cambios van como campos normales. Cuando diga que está listo, mandá "op_compleja_recalcular": true.'+(opCompleja.editando===1?' El sistema recalcula el aporte y reacomoda el paso 2 SOLO: no preguntes de nuevo las condiciones del segundo grano.':''));
+      return est('C_EDIT', 'El usuario está EDITANDO el paso '+opCompleja.editando+' de la operación compleja cerrada. Los cambios van como campos normales (precio, com, factor...). NO vuelvas a mandar op_compleja_editar_paso: ya estás en edición. Cuando diga que está listo, mandá "op_compleja_recalcular": true junto con el último campo si lo dio recién.'+(opCompleja.editando===1?' El sistema recalcula el aporte y reacomoda el paso 2 SOLO: no preguntes de nuevo las condiciones del segundo grano.':''));
     }
     // PASO 1: cargar y definir condiciones del primer grano
     if(opCompleja.paso === 1){
@@ -4483,7 +4483,20 @@ function procesarRespuesta(texto){
     agregarMensaje('Ahí va el PDF de ' + (glMap[gPed]||gPed) + '. La pantalla queda como estaba.', 'bot');
     return;
   }
+  // ¿Este turno trae algún campo que cambia el cálculo? (para ediciones en un solo paso)
+  const trajoCambiosCalculo = ['precio','precio_moneda','com','factor','k_total','tc','tc_vendedor','hum_recibo','g_paritarias','g_secada','g_fumigada','puntos_libres','flete_corto','flete_largo','flete_corto_km','flete_largo_km','flete_corto_aj','flete_largo_aj','flete_largo_tipo'].some(k=>c[k]!==undefined);
+
   // ── EDICIÓN de un paso de la operación POR MONTOS (solo con la operación cerrada) ──
+  function ejecutarActualizacionMontos(){
+    if(typeof calcular==='function') calcular();
+    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
+    const i = opMontos.editandoIdx; opMontos.editandoIdx = null;
+    opMontos.resumenes[i].tn = gv('res_kilos');
+    opMontos.resumenes[i].foto = tomarFoto();
+    const last = opMontos.resumenes.length - 1;
+    if(i!==last && opMontos.resumenes[last].foto) restaurarFoto(opMontos.resumenes[last].foto);
+    agregarMensaje('Listo, actualicé ese paso.\n\n' + opMontosResumenFinalMsg(), 'bot');
+  }
   if(c.op_montos_editar && opMontos && opMontos.cerrada){
     const gPed = (''+c.op_montos_editar).toLowerCase().replace('í','i').trim();
     const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
@@ -4495,39 +4508,29 @@ function procesarRespuesta(texto){
       agregarMensaje('No encuentro un paso de ' + (glMap[gPed]||gPed) + ' en esta operación. Los granos cargados fueron: ' + opMontos.resumenes.map(r=>r.grano).join(', ') + '.', 'bot');
       return;
     }
+    const yaEditandoM = (opMontos.editandoIdx === i);
     opMontos.editandoIdx = i;
-    restaurarFoto(opMontos.resumenes[i].foto);
-    agregarMensaje('Listo, volvimos al paso de ' + (glMap[gPed]||gPed) + ' (cubre ' + opMontos.resumenes[i].montoTxt + '). Decime qué cambiás: precio, comisión, factor o condiciones de recibo.', 'bot');
+    if(!yaEditandoM) restaurarFoto(opMontos.resumenes[i].foto);
+    aplicarCamposBasicos(c); // los campos que vinieron JUNTO con el pedido de editar se aplican
+    if(trajoCambiosCalculo){
+      // El cambio ya vino en la misma frase: recalcular y rearmar todo de una.
+      ejecutarActualizacionMontos();
+      return;
+    }
+    if(!yaEditandoM){
+      agregarMensaje('Listo, volvimos al paso de ' + (glMap[gPed]||gPed) + ' (cubre ' + opMontos.resumenes[i].montoTxt + '). Decime qué cambiás: precio, comisión, factor o condiciones de recibo.', 'bot');
+    } else {
+      agregarMensaje('Seguimos en el paso de ' + (glMap[gPed]||gPed) + '. Decime el cambio concreto (por ejemplo: "precio 450000").', 'bot');
+    }
     return;
   }
   if(c.op_montos_actualizar && opMontos && opMontos.cerrada && opMontos.editandoIdx!=null){
     aplicarCamposBasicos(c); // por si manda el último cambio en el mismo turno
-    if(typeof calcular==='function') calcular();
-    const gv = id => document.getElementById(id)?.textContent?.trim() || '';
-    const i = opMontos.editandoIdx; opMontos.editandoIdx = null;
-    opMontos.resumenes[i].tn = gv('res_kilos');
-    opMontos.resumenes[i].foto = tomarFoto();
-    const last = opMontos.resumenes.length - 1;
-    if(i!==last && opMontos.resumenes[last].foto) restaurarFoto(opMontos.resumenes[last].foto);
-    agregarMensaje('Listo, actualicé ese paso.\n\n' + opMontosResumenFinalMsg(), 'bot');
+    ejecutarActualizacionMontos();
     return;
   }
   // ── EDICIÓN de un paso de la operación COMPLEJA (solo cerrada; paso 1 cascadea al 2) ──
-  if(c.op_compleja_editar_paso && opCompleja && opCompleja.paso===3){
-    const n = parseInt(c.op_compleja_editar_paso, 10);
-    const foto = (n===1) ? opCompleja.foto1 : (n===2) ? opCompleja.foto2 : null;
-    if(!foto){
-      agregarMensaje('No tengo guardado ese paso para editarlo. De esta operación puedo editar el paso 1 o el paso 2.', 'bot');
-      return;
-    }
-    const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
-    opCompleja.editando = n;
-    restaurarFoto(foto);
-    agregarMensaje('Listo, volvimos al paso ' + n + ' (' + (glMap[foto.grano]||foto.grano) + '). Decime qué cambiás.' + (n===1 ? ' Ojo: al recalcular, el paso 2 se reacomoda solo con el saldo nuevo.' : ''), 'bot');
-    return;
-  }
-  if(c.op_compleja_recalcular && opCompleja && opCompleja.editando){
-    aplicarCamposBasicos(c); // por si manda el último cambio en el mismo turno
+  function ejecutarRecalculoCompleja(){
     if(typeof calcular==='function') calcular();
     const gv = id => document.getElementById(id)?.textContent?.trim() || '';
     const fmt = n => (typeof ars==='function') ? ars(Math.round(n)) : Math.round(n);
@@ -4578,6 +4581,34 @@ function procesarRespuesta(texto){
            + (tn2Vieja ? ' (antes ' + tn2Vieja + ')' : '') + '.';
     }
     agregarMensaje(msg, 'bot');
+  }
+  if(c.op_compleja_editar_paso && opCompleja && opCompleja.paso===3){
+    const n = parseInt(c.op_compleja_editar_paso, 10);
+    const yaEditandoC = (opCompleja.editando === n);
+    const foto = (n===1) ? opCompleja.foto1 : (n===2) ? opCompleja.foto2 : null;
+    if(!foto && !yaEditandoC){
+      agregarMensaje('No tengo guardado ese paso para editarlo. De esta operación puedo editar el paso 1 o el paso 2.', 'bot');
+      return;
+    }
+    const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
+    opCompleja.editando = n;
+    if(!yaEditandoC) restaurarFoto(foto);
+    aplicarCamposBasicos(c); // los campos que vinieron JUNTO con el pedido de editar se aplican
+    if(trajoCambiosCalculo){
+      // El cambio vino en la misma frase ("el maíz a 200"): recalcular todo de una.
+      ejecutarRecalculoCompleja();
+      return;
+    }
+    if(!yaEditandoC){
+      agregarMensaje('Listo, volvimos al paso ' + n + ' (' + (glMap[foto.grano]||foto.grano) + '). Decime qué cambiás.' + (n===1 ? ' Ojo: al recalcular, el paso 2 se reacomoda solo con el saldo nuevo.' : ''), 'bot');
+    } else {
+      agregarMensaje('Seguimos editando el paso ' + n + '. Decime el cambio concreto (por ejemplo: "precio 200 dólares").', 'bot');
+    }
+    return;
+  }
+  if(c.op_compleja_recalcular && opCompleja && opCompleja.editando){
+    aplicarCamposBasicos(c); // por si manda el último cambio en el mismo turno
+    ejecutarRecalculoCompleja();
     return;
   }
   // ── OPERACIÓN POR MONTOS (cada grano cubre un importe fijo; el código lleva los pasos) ──
