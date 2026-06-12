@@ -1420,11 +1420,15 @@ function getP(){
   const mermaInfo = getMerma(grano, humRec);
   const tc = pv('tc')||0;
   const tcVend = pv('tc_vendedor')||tc;
-  // precio: si el toggle está en $ lo paso a USD/tn dividiendo por TC vendedor
+  // precio: el motor trabaja internamente en USD/tn y el bruto se arma con
+  // precio × TC COMPRADOR. Regla de negocio: precio pactado en PESOS queda en
+  // pesos EXACTO (sin peaje de brecha). Por eso, si el toggle está en $, se
+  // divide por el COMPRADOR: al multiplicar de vuelta, el viaje es neutro
+  // (raw/tc × tc = raw). El vendedor queda SOLO para gastos y deuda en USD.
   const precioRaw = pv('precio')||0;
   const precioCurEl = document.getElementById('precio_curr');
   const precioCur = precioCurEl ? precioCurEl.dataset.curr : 'usd';
-  const precioUSD = precioCur==='ars' ? (tcVend>0 ? precioRaw/tcVend : 0) : precioRaw;
+  const precioUSD = precioCur==='ars' ? (tc>0 ? precioRaw/tc : 0) : precioRaw;
   return{
     tc,
     precio: precioUSD,
