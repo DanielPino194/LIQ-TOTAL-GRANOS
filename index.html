@@ -1494,9 +1494,6 @@ function actualizarKmTarifa(flete){
     disp.textContent = '—';
   }
 }
-function actualizarTodasKmTarifas(){
-  ['corto','salida'].forEach(actualizarKmTarifa);
-}
 
 // Devuelve $/tn en ARS (usa TC vendedor para USD)
 function getFleteARS(flete, tc){
@@ -1516,14 +1513,6 @@ function getFleteARS(flete, tc){
 // Compatibilidad con código viejo
 let fcModo='tarifa';
 function setFCModo(m){ setFleteModo('corto', m==='tar'?'tarifa':'km'); fcModo=m; }
-function getFleteCortoARS(tc){ return getFleteARS('corto', tc); }
-function ajKm(delta){
-  const el=document.getElementById('g_flete_corto_km');
-  if(!el) return;
-  el.value=Math.max(1,Math.min(1000,(parseInt(el.value)||0)+delta));
-  actualizarKmTarifa('corto');
-  calcular();
-}
 
 // Stepper para Ajuste % en fletes (corto y largo)
 function ajustarPct(id, delta){
@@ -3015,18 +3004,6 @@ function opComplejaIniciar(totales){
   return opCompleja;
 }
 
-// Calcula cuánto NETO (en ARS) produce la cantidad de toneladas actualmente cargada
-// usando el motor real (liq), sin depender de Liza.
-function opComplejaAporteActual(){
-  if(typeof getP!=='function' || typeof liq!=='function') return 0;
-  const p = getP();
-  const tn = (typeof pv==='function') ? (pv('k_total')||0) : 0;
-  if(tn<=0) return 0;
-  // neto total = canje + pago = el productor entrega tn y obtiene este valor en ARS
-  const r = liq(tn, 'pago', p); // 'pago' da el neto cobrable; para canje el tp es similar salvo retenciones
-  // usamos el neto del último cálculo si está disponible (más fiel al reparto real)
-  return r.tp || 0;
-}
 
 // Calcula el saldo pendiente tras el paso 1, en USD y ARS por separado.
 // Regla: la soja cubre PRIMERO la deuda; lo que falta de deuda (y opcionalmente del cobro)
@@ -3400,12 +3377,6 @@ function gemMic(){
   }
 }
 
-function gemReiniciar(){
-  gemHistorial = [];
-  const msgs = document.getElementById('gem-msgs');
-  msgs.innerHTML = '<div class="gem-msg bot">Hola, soy Liza. ¿Qué operación querés hacer? Contame con calma.</div>';
-  scrollMsgs();
-}
 
 // Borra los datos cargados en la app (vuelve a valores por defecto)
 // SIN borrar el chat ni el historial: mantiene el contexto de la conversación
@@ -4449,6 +4420,8 @@ function procesarRespuesta(texto){
   }
   // ── DESGLOSE POR TONELADA IMPRESO POR EL CÓDIGO (Liza no elige ni etiqueta números) ──
   if(c.desglose_tn){
+    aplicarCamposBasicos(c); // si vino un cambio en el mismo turno, el desglose lo refleja
+    if(typeof calcular==='function') calcular();
     const numD = s => { const v = (typeof parseNum==='function') ? parseNum((''+s).replace(/[^\d.,-]/g,'')) : NaN; return isNaN(v)?0:v; };
     const gvT = id => document.getElementById(id)?.textContent || '';
     const tnN = numD(gvT('res_kilos'));
@@ -4538,6 +4511,8 @@ function procesarRespuesta(texto){
   }
   // ── PDF DE CUALQUIER GRANO de la operación (usa las fotos guardadas por paso) ──
   if(c.pdf_grano){
+    aplicarCamposBasicos(c); // cambios del mismo turno se aplican al grano cargado
+    if(typeof calcular==='function') calcular();
     const gPed = (''+c.pdf_grano).toLowerCase().replace('í','i').trim();
     const granoAct = document.getElementById('grano')?.value;
     const glMap = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
@@ -4726,6 +4701,7 @@ function procesarRespuesta(texto){
   // Cierre de un paso: el código calcula las tn y ofrece el PDF de ESE grano
   // antes de pisar los datos (los PDF nunca mezclan granos).
   if(c.op_montos_siguiente && opMontos && opMontos.activa && !opMontos.cerrada && !opMontos.esperandoAvance){
+    aplicarCamposBasicos(c); // un último cambio en el mismo turno entra al cierre
     if(typeof calcular==='function') calcular();
     const gv = id => document.getElementById(id)?.textContent?.trim() || '';
     const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
@@ -4758,10 +4734,17 @@ function procesarRespuesta(texto){
     if(opMontos.tcVendedor) setInputVal('tc_vendedor', opMontos.tcVendedor);
     marcarCargado('tc');
     opMontosCargarPasoActual();
+    // Los campos que vinieron JUNTO con el avance pertenecen al paso nuevo
+    // ("seguimos, a 195 dólares"): se aplican acá y no se vuelve a preguntar.
+    const ccCont = Object.assign({}, c);
+    ['deuda_usd','deuda_ars','cobrar_usd','cobrar_ars','grano','modo','dest'].forEach(k=>delete ccCont[k]);
+    aplicarCamposBasicos(ccCont);
+    if(typeof calcular==='function') calcular();
     const granoLbl = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'};
     const pSig = opMontos.pasos[opMontos.idx];
     const glSig = granoLbl[pSig.grano]||pSig.grano;
-    agregarMensaje('Vamos con ' + glSig + ' para cubrir ' + opMontosMontoTxt(pSig) + '. ¿A qué precio lo vendés?', 'bot');
+    const preguntaCont = (c.precio!==undefined) ? '¿Qué comisión te cobran?' : '¿A qué precio lo vendés?';
+    agregarMensaje('Vamos con ' + glSig + ' para cubrir ' + opMontosMontoTxt(pSig) + '. ' + preguntaCont, 'bot');
     return;
   }
   // ── OPERACIÓN COMPLEJA (máquina de estados en código) ──
@@ -4792,6 +4775,7 @@ function procesarRespuesta(texto){
     opCompleja.cubrir2 = (c.op_compleja_cubrir==='todo') ? 'todo' : 'deuda';
     // El CÓDIGO arma la pregunta del precio con el grano2 correcto (no Liza, que puede equivocar el grano).
     if(!c.op_compleja_paso2){
+      aplicarCamposBasicos(c); // por si algún campo vino junto con la elección
       const g2 = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'}[opCompleja.grano2] || 'el segundo grano';
       const queCubre = opCompleja.cubrir2==='todo' ? 'Vamos a cubrir la deuda y el saldo a cobrar.' : 'Vamos a cubrir solo la deuda.';
       agregarMensaje(queCubre + ' ¿A qué precio cargo ' + g2 + '?', 'bot');
@@ -4831,6 +4815,12 @@ function procesarRespuesta(texto){
     if(c.com!==undefined){ setInputVal('com',c.com); marcarCargado('com'); }
     setInputVal('deuda_ars', Math.round(saldo.deudaARS));
     if(saldo.cobrarARS>0) setInputVal('cobrar_ars', Math.round(saldo.cobrarARS));
+    // Cualquier OTRO campo que haya venido en el mismo turno (factor, humedad,
+    // fletes...) se aplica acá, EXCLUYENDO lo que este manejador ya cargó
+    // (deuda/cobro del saldo, grano, modo, toneladas).
+    const ccP2 = Object.assign({}, c);
+    ['deuda_usd','deuda_ars','cobrar_usd','cobrar_ars','grano','modo','dest','k_total'].forEach(k=>delete ccP2[k]);
+    aplicarCamposBasicos(ccP2);
     if(typeof calcular==='function') calcular();
     // NO cerramos todavía: falta preguntar las condiciones del segundo grano.
     const g2 = {soja:'la soja',maiz:'el maíz',trigo:'el trigo',cebada:'la cebada',girasol:'el girasol'}[granoPaso2] || 'el segundo grano';
@@ -4840,6 +4830,7 @@ function procesarRespuesta(texto){
   }
   // Cierre de la operación compleja: después de definir las condiciones del segundo grano
   if(c.op_compleja_cerrar && opCompleja && opCompleja.paso===2){
+    aplicarCamposBasicos(c); // un último cambio en el mismo turno entra al cierre
     if(typeof calcular==='function') calcular();
     const gv = id => document.getElementById(id)?.textContent?.trim() || '';
     const tnNec = gv('res_kilos');
@@ -5169,11 +5160,6 @@ function gemNumeroEnPalabras(n){
     if(x===100) return 'cien';
     const c=Math.floor(x/100), r=x%100;
     return r===0 ? centenas[c] : centenas[c]+' '+menor100(r);
-  }
-  function seccion(x, singular, plural){
-    if(x===0) return '';
-    if(x===1) return singular;
-    return menor1000(x)+' '+plural;
   }
   let palabras='';
   const millones=Math.floor(n/1000000);
