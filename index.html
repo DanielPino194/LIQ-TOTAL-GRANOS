@@ -3565,7 +3565,9 @@ async function llamarGemini(texto){
       + '\n- "total a pagar de la liquidación" → "a_pagar" · "los gastos de recibo / fletes" → "gastos_recibo"'
       + '\n- "cuánto recibo / me queda en mano / en el bolsillo" → "desglose_tn": "recibis"'
       + '\n- "el bruto" → "desglose_tn": "bruto" · "el IVA" → "iva" · "las deducciones" → "deducciones" · "las retenciones" → "retenciones"'
-      + '\n- "el detalle", "el desglose completo", o si la pregunta es ambigua → "desglose_tn": true (tabla completa).';
+      + '\n- "el total", "el monto total", "no por tonelada" → agregá "desglose_unidad": "total" junto con la línea pedida (si no aclara cuál, la última que se habló).'
+      + '\n- "en dólares", "convertime a dólares", "cuánto es en USD" sobre un RESULTADO → repetí la clave desglose_tn que corresponda y agregá "desglose_moneda": "usd". TERMINANTEMENTE PROHIBIDO tocar "precio_moneda" para esto: precio_moneda SOLO se cambia si el usuario corrige el PRECIO de venta, nunca para convertir resultados.'
+      + '\n- "el detalle", "el desglose completo", o si la pregunta es ambigua → "desglose_tn": true (tabla completa; acepta los mismos modificadores).';
   }
 
   // Bloque de resultados calculados para inyectar en el prompt
@@ -3667,7 +3669,7 @@ En resumen: no te adelantás con cifras al cargar/recalcular, pero cuando te pre
 </regla_cifras>
 
 <claves_validas>
-grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano, desglose_tn.
+grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano, desglose_tn, desglose_unidad, desglose_moneda.
 </claves_validas>
 
 <regla_de_hierro_campos>
@@ -3780,6 +3782,10 @@ Operación POR MONTOS: dos o más granos, cada uno cubre un monto fijo que dijo 
 <montos_relativos>
 "El resto", "el saldo", "lo que sobra" NO son montos cargables y en una operación SIMPLE no existen. Si el usuario dice "cancelo X y cobro el resto": el resto sale de las TONELADAS. Preguntale cuántas toneladas tiene y pasá a modo kilos ("modo":"kilos" + "k_total"): ahí la app muestra lo que recibe después de cancelar la deuda. Si no tiene una cantidad de toneladas, pedile el monto concreto a cobrar. NUNCA respondas "Entendido" a un monto relativo sin cargar nada ni pedir el dato que falta.
 </montos_relativos>
+
+<destino>
+Si el usuario dice que la operación es "para canje" / "en canje" / "todo a pago", mandá "dest": "canje" (o "pago") apenas lo diga, junto con los demás campos. NO lo ignores: cambia toda la liquidación. Recordá que el canje cancela una deuda: si no hay deuda cargada, el sistema te va a pedir que la preguntes.
+</destino>
 
 <buscar_web>
 Si el usuario pide un dato que cambia a diario (dólar BNA, pizarra), mandá "buscar_web": "la consulta".
@@ -4482,9 +4488,19 @@ function procesarRespuesta(texto){
       return;
     }
     const pedidoTn = (typeof c.desglose_tn==='string') ? c.desglose_tn.toLowerCase().trim() : '';
+    // Modificadores: unidad (por tonelada o TOTAL) y moneda (pesos o TAMBIÉN en USD).
+    // La conversión a USD de valores del grano va al TC COMPRADOR (regla de negocio)
+    // y se muestra junto al peso, nunca en reemplazo.
+    const unidadTotal = (c.desglose_unidad==='total');
+    const enUSD = (c.desglose_moneda==='usd');
+    const tcComp = (typeof pv==='function') ? (pv('tc')||0) : 0;
+    const fUSDc = n => Math.round(n).toLocaleString('es-AR') + ' USD';
+    const fVal = v => fD(unidadTotal ? v : v/tnN);
+    const sufUni = unidadTotal ? ' en total' : ' por tonelada';
+    const conUSD = v => (enUSD && tcComp>0) ? ' (≈ ' + fUSDc((unidadTotal ? v : v/tnN)/tcComp) + ' al comprador)' : '';
     if(lineasTn[pedidoTn]){
       const lblTn = lineasTn[pedidoTn][0], valTn = lineasTn[pedidoTn][1];
-      agregarMensaje(lblTn + ': ' + fD(valTn/tnN) + ' por tonelada'
+      agregarMensaje(lblTn + ': ' + fVal(valTn) + sufUni + conUSD(valTn)
         + (pedidoTn==='deuda' && deudaT>0 ? ' (deuda total ' + fD(deudaT) + (parcial ? '; queda un saldo SIN cubrir de ' + fD(saldoSin) + (tcVdes>0 ? ', unos ' + fUSD(saldoSin/tcVdes) : '') : '') + ')' : '')
         + (pedidoTn==='recibis' && parcial ? ' (la deuda no llega a cubrirse con estas toneladas)' : '')
         + '. Si querés el desglose completo, pedime el detalle.', 'bot');
@@ -4492,18 +4508,19 @@ function procesarRespuesta(texto){
       gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(línea impresa por el sistema)'})}]});
       return;
     }
-    let msgD = 'Desglose por tonelada (sobre ' + gvT('res_kilos').trim() + ' tn), línea por línea de la liquidación:\n'
-      + '· Importe bruto (sin IVA): ' + fD(bruto/tnN) + ' /tn\n'
-      + '· IVA (10,5%): ' + fD(iva/tnN) + ' /tn\n'
-      + '· Total deducciones: ' + fD(deduc/tnN) + ' /tn\n'
-      + '· Total retenciones: ' + fD(reten/tnN) + ' /tn\n'
-      + '· Total a pagar de la liquidación: ' + fD(aPagar/tnN) + ' /tn\n'
-      + (gastosRecibo>0 ? '· Gastos de recibo y fletes (c/IVA): ' + fD(gastosRecibo/tnN) + ' /tn\n' : '')
-      + '· NETO de todos los gastos (antes de la deuda): ' + fD((recT+deudaT)/tnN) + ' /tn\n'
-      + (deudaT>0 ? '· Va a la deuda' + (parcial?' (lo que cubrís)':'') + ': ' + fD(cubierto/tnN) + ' /tn (cubre ' + fD(cubierto) + ' de ' + fD(deudaT) + ')\n' : '')
+    const ud = unidadTotal ? '' : ' /tn';
+    let msgD = 'Desglose ' + (unidadTotal ? 'en TOTALES' : 'por tonelada') + ' (sobre ' + gvT('res_kilos').trim() + ' tn), línea por línea de la liquidación:\n'
+      + '· Importe bruto (sin IVA): ' + fVal(bruto) + ud + conUSD(bruto) + '\n'
+      + '· IVA (10,5%): ' + fVal(iva) + ud + conUSD(iva) + '\n'
+      + '· Total deducciones: ' + fVal(deduc) + ud + conUSD(deduc) + '\n'
+      + '· Total retenciones: ' + fVal(reten) + ud + conUSD(reten) + '\n'
+      + '· Total a pagar de la liquidación: ' + fVal(aPagar) + ud + conUSD(aPagar) + '\n'
+      + (gastosRecibo>0 ? '· Gastos de recibo y fletes (c/IVA): ' + fVal(gastosRecibo) + ud + conUSD(gastosRecibo) + '\n' : '')
+      + '· NETO de todos los gastos (antes de la deuda): ' + fVal(recT+deudaT) + ud + conUSD(recT+deudaT) + '\n'
+      + (deudaT>0 ? '· Va a la deuda' + (parcial?' (lo que cubrís)':'') + ': ' + fVal(cubierto) + ud + ' (cubre ' + fD(cubierto) + ' de ' + fD(deudaT) + ')\n' : '')
       + (parcial ? '· SALDO de deuda SIN cubrir: ' + fD(saldoSin) + (tcVdes>0 ? ' (unos ' + fUSD(saldoSin/tcVdes) + ' al vendedor)' : '') + '\n' : '')
-      + '· Lo que recibís: ' + (parcial ? fD(0) + ' (la deuda no llega a cubrirse)' : fD(recT/tnN) + ' /tn') + '\n'
-      + 'Cada línea es una celda del panel de la liquidación dividida por las toneladas.';
+      + '· Lo que recibís: ' + (parcial ? fD(0) + ' (la deuda no llega a cubrirse)' : fVal(recT) + ud + conUSD(recT)) + '\n'
+      + 'Cada línea sale de las celdas del panel de la liquidación' + (enUSD && tcComp>0 ? '; los USD son al TC comprador ' + fD(tcComp) : '') + '.';
     agregarMensaje(msgD, 'bot');
     gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió el desglose por tonelada calculado por el código. NO repitas ni reinterpretes esos números. Si el usuario pregunta por otro valor por tonelada, mandá desglose_tn: true de nuevo.)'}]});
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(desglose impreso por el sistema)'})}]});
