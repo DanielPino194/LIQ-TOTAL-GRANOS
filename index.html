@@ -3780,6 +3780,7 @@ Si el sistema no pudo confirmar el divisa (o solo halló el billete), avisá que
 <generar_pdf>
 Cuando el usuario pida PDF ("pasame el pdf", "el comprobante"), mandá "generar_pdf": "resumen" (o "canje"/"pago" si especifica). Decirlo en el mensaje NO alcanza: sin el campo no se descarga.
 REGLA DE ORO DEL PDF: si VOS ofreciste el PDF y el usuario responde "sí", "dale", "ok" o similar, mandá "generar_pdf" EN ESE MISMO turno. PROHIBIDO volver a preguntar si quiere el PDF: ya dijo que sí.
+PEDIDO DOBLE: si el usuario pide el PDF Y otra cosa en la misma frase ("pasame el pdf y cubrimos todo con maíz", "pasame el pdf y seguimos"), mandá "generar_pdf" JUNTO con la otra clave (op_compleja_cubrir, op_montos_continuar, el campo que sea) en el MISMO JSON. El sistema genera el PDF primero y sigue con lo demás. NUNCA postergues ni te olvides del PDF por atender la otra parte.
 Si piden el PDF del grano cargado AHORA, mandá "generar_pdf" directo, sin aclaraciones. Si piden el PDF de OTRO grano de la operación (un paso anterior), mandá "pdf_grano": "<grano>" (ej: "pdf_grano": "maiz"): el sistema lo arma con la foto guardada de ese paso y deja la pantalla como estaba. Podés combinarlo con "generar_pdf": "canje" o "pago" si piden esa liquidación específica. Los PDF siempre son de UN solo grano. No des aclaraciones sobre pasos anteriores salvo que pregunten.
 </generar_pdf>
 
@@ -4216,6 +4217,29 @@ function procesarRespuesta(texto){
     }
   } else if(!c.buscar_web) {
     window._reintentoBusqueda = false;
+  }
+
+  // ── PDF PRIMERO ──
+  // El PDF se ejecuta ANTES de cualquier manejador de operación: si viene junto
+  // con otra acción en el mismo turno ("pasame el pdf y seguimos con el maíz"),
+  // los return de esos manejadores ya no se lo pueden comer. El PDF refleja el
+  // estado ACTUAL de la pantalla, que es exactamente lo que el usuario está viendo.
+  function ejecutarPDF(tipoPedido){
+    let tipo = (''+tipoPedido).toLowerCase();
+    if(tipo!=='canje' && tipo!=='pago') tipo='resumen';
+    try{ descargarPDF(tipo); return true; }
+    catch(e){ agregarMensaje('Tuve un problema al generar el PDF. Probá con el botón PDF de la pantalla.', 'error'); return false; }
+  }
+  if(c.generar_pdf && !c.pdf_grano){
+    // Verificar que el USUARIO haya cargado datos reales (no los defaults de la app).
+    const hayDatosReales = (camposCargados['grano'] && camposCargados['precio'])
+      || (opCompleja && opCompleja.activa)
+      || (opMontos && opMontos.activa);
+    if(!hayDatosReales){
+      agregarMensaje('Para generar el PDF necesito la operación cargada: grano, toneladas y precio. ¿Me los pasás?', 'bot');
+    } else if(typeof descargarPDF==='function'){
+      ejecutarPDF(c.generar_pdf);
+    }
   }
 
   // ── Marcar campos opcionales como "ya preguntados" según el estado del flujo ──
@@ -4925,24 +4949,7 @@ function procesarRespuesta(texto){
 
   agregarMensaje(msg,'bot');
   // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
-  // Ejecuta la descarga del PDF del estado ACTUAL de la pantalla (jsPDF, sincrónico).
-  function ejecutarPDF(tipoPedido){
-    let tipo = (''+tipoPedido).toLowerCase();
-    if(tipo!=='canje' && tipo!=='pago') tipo='resumen';
-    try{ descargarPDF(tipo); return true; }
-    catch(e){ agregarMensaje('Tuve un problema al generar el PDF. Probá con el botón PDF de la pantalla.', 'error'); return false; }
-  }
-  if(c.generar_pdf && !c.pdf_grano){
-    // Verificar que el USUARIO haya cargado datos reales (no los defaults de la app).
-    const hayDatosReales = (camposCargados['grano'] && camposCargados['precio'])
-      || (opCompleja && opCompleja.paso===3)
-      || (opMontos && (opMontos.cerrada || opMontos.esperandoAvance));
-    if(!hayDatosReales){
-      agregarMensaje('Para generar el PDF necesito la operación cargada: grano, toneladas y precio. ¿Me los pasás?', 'bot');
-    } else if(typeof descargarPDF==='function'){
-      ejecutarPDF(c.generar_pdf);
-    }
-  }
+
 }
 
 function setInputVal(id,val){
