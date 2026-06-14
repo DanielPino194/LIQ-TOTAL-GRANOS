@@ -1409,7 +1409,7 @@ function liq(k,tipo,p){
   const rg=ec?0:!p.rog?Math.max(0,(bruto-ct-MNI)*0.15):Math.max(0,(bruto-ct-MNI)*0.02);
   const tr=ri+rib+rg;
   const tp=total-td-tr-rib;
-  const cbu=p.rog?(bruto-ct)*0.025:0;
+  const cbu=(tipo==='pago'&&p.rog)?(bruto-ct)*0.025:0;
   return{bruto,total,cb,ct,sel,der,hon,td,ri,rib,rg,tr,tp,cbu,imp:tp-cbu,kNeto,kBruto:k};
 }
 
@@ -1667,7 +1667,7 @@ function renderLiq(pfx,k,tipo,p,plusUSD,plusARStn){
   set(pfx+'_total_pagar',ars(r.tp));
   set(pfx+'_total_pagar_usd',usd_(r.tp/tc));
   const rcbu=document.getElementById(pfx+'_row_cbu');
-  if(rcbu)rcbu.style.display=p.rog?'':'none';
+  if(rcbu)rcbu.style.display=(pfx==='p'&&p.rog)?'':'none';
   if(p.rog)set(pfx+'_cbu_rog',ars(r.cbu));
   set(pfx+'_importe_pagar',ars(r.imp));
   set(pfx+'_importe_pagar_usd',usd_(r.imp/tc));
@@ -2178,7 +2178,7 @@ function descargarPDFLiquidacion(tipoLiq){
   doc.setFont('helvetica','bold');
   doc.text(ars(r.tp), 196, y+3, {align:'right'});
 
-  if(p.rog){
+  if(!isCanje&&p.rog){
     doc.setFont('helvetica','normal');
     doc.setFontSize(9);
     doc.text('CBU ROG (2,5%)', 14, y+10);
@@ -3205,7 +3205,7 @@ function flujoEstado(){
       return est('M_PDF_O_SIGUE', enc+'Este paso quedó CERRADO y sus datos siguen en la app. Si el usuario pide el PDF de '+gl+', mandá "generar_pdf". Cuando quiera seguir con '+glSig+' (o diga que no quiere PDF), mandá "op_montos_continuar": true. NO preguntes otra cosa.');
     }
     if(!cargado('precio')) return est('M_PRECIO', enc+'Falta el precio. Preguntá a qué precio vende '+gl+'. Cargá "precio" y "precio_moneda".');
-    if(!cargado('tc')) return est('M_TC', enc+'Falta el tipo de cambio. Preguntá: "¿Qué tipo de cambio usamos? ¿Comprador y vendedor, o busco el divisa del BNA?". Si pide buscarlo, mandá "buscar_web".');
+    if(!cargado('tc')) return est('M_TC', enc+'Falta el tipo de cambio. Preguntá: "¿Te busco el tipo de cambio o lo cargás vos?". Si lo carga él, pedí comprador y vendedor. Si pide buscarlo, mandá "buscar_web".');
     if(!cargado('com')) return est('M_COM', enc+'Falta la comisión de '+gl+'. Preguntá: "¿Qué comisión te cobran?". Cargá "com".');
     if(!flujoPreguntado['factorS']) return est('M_FACTOR', enc+'Preguntá si aplica algún factor sobre el precio de '+gl+' o queda en 100. Cargá "factor".');
     if(!flujoPreguntado['reciboS']) return est('M_RECIBO', enc+'Preguntá si suma condiciones de recibo a '+gl+' (humedad, paritarias, secada, fumigada, flete) o lo deja así. Cuando termine o diga que no, mandá "op_montos_siguiente": true. NUNCA mandes mostrar_resultado en esta operación.');
@@ -3228,7 +3228,7 @@ function flujoEstado(){
       if(!cargado('grano')) return est('C1_GRANO', 'Falta el PRIMER grano. Preguntá: "¿Qué grano vas a vender primero?". Cargalo con "grano".');
       if(!opCompleja.montoFijo1 && !cargado('k_total')) return est('C1_TN', 'Faltan las toneladas del primer grano. Preguntá cuántas toneladas tiene. Cargá "k_total".');
       if(!cargado('precio')) return est('C1_PRECIO', 'Falta el precio del primer grano. Preguntá a qué precio lo vende. Cargá "precio" y "precio_moneda".');
-      if(!cargado('tc')) return est('C1_TC', 'Falta el tipo de cambio. Preguntá: "¿Qué tipo de cambio usamos? Comprador y vendedor, o busco el divisa del BNA." Si pide buscarlo, usá "buscar_web".');
+      if(!cargado('tc')) return est('C1_TC', 'Falta el tipo de cambio. Preguntá: "¿Te busco el tipo de cambio o lo cargás vos?" Si lo carga él, pedí comprador y vendedor. Si pide buscarlo, usá "buscar_web".');
       if(!cargado('com')) return est('C1_COM', 'Falta la comisión. Preguntá: "¿Qué comisión te cobran?". Cargá "com".');
       if(!flujoPreguntado['factor1']) return est('C1_FACTOR', 'Preguntá: "¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?". Si da un número, cargá "factor". Si dice que no/queda en 100, igual marcá factor preguntado mandando "factor": 100.');
       if(!flujoPreguntado['recibo1']) return est('C1_RECIBO', 'Preguntá: "¿Sumamos alguna condición de recibo (humedad, paritarias, secada, fumigada, flete), o lo dejamos así?". Si suma algo, cargá los campos. Cuando el usuario termine o diga que no, mandá "op_compleja_calcular_saldo": true para que el sistema muestre el saldo.');
@@ -3263,7 +3263,7 @@ function flujoEstado(){
     if(!cargado('k_total')) return est('S_TN', 'Faltan las toneladas. Preguntá cuántas toneladas tiene. Cargá "k_total".');
   }
   if(!cargado('precio')) return est('S_PRECIO', 'Falta el precio. Preguntá a qué precio vende. Cargá "precio" y "precio_moneda".');
-  if(!cargado('tc')) return est('S_TC', 'Falta el tipo de cambio. Preguntá comprador y vendedor, o ofrecé buscar el divisa del BNA ("buscar_web").');
+  if(!cargado('tc')) return est('S_TC', 'Falta el tipo de cambio. Preguntá: "¿Te busco el tipo de cambio o lo cargás vos?". Si lo carga él, pedí comprador y vendedor. Si pide buscarlo, usá "buscar_web" (divisa BNA).');
   if(!cargado('com')) return est('S_COM', 'Falta la comisión. Preguntá: "¿Qué comisión te cobran?". Cargá "com".');
   if(!flujoPreguntado['factorS']) return est('S_FACTOR', 'Preguntá si aplica factor o queda en 100. Cargá "factor" (o 100 si no).');
   if(!flujoPreguntado['reciboS']) return est('S_RECIBO', 'Preguntá si suma condiciones de recibo. Cuando termine o diga que no, mandá "mostrar_resultado": true.');
@@ -3682,7 +3682,7 @@ ETAPA 1 — DATOS BÁSICOS: pedí lo que falte, UNO por turno, mirando el estado
 Lo que figure como "(falta, preguntar)" todavía NO lo dio el usuario.
 
 ETAPA 2 — CONDICIONES, en este orden estricto, UNA por turno:
-a) Tipo de cambio: "¿Qué tipo de cambio usamos? Comprador y vendedor, o busco el divisa del BNA."
+a) Tipo de cambio: "¿Te busco el tipo de cambio o lo cargás vos?"
 b) Comisión: "¿Qué comisión te cobran?"
 c) Factor: "¿Aplicamos algún factor sobre el precio, o lo dejamos en 100?"
 d) Recibo: "¿Sumamos condición de recibo (humedad, paritarias, secada, fumigada, flete), o lo dejamos así?"
@@ -4693,7 +4693,7 @@ function procesarRespuesta(texto){
     const gl = granoLbl[p1.grano]||p1.grano;
     let m = 'Listo, vamos por partes: primero ' + gl + ' para cubrir ' + opMontosMontoTxt(p1) + '.';
     m += camposCargados['precio']
-      ? ' ¿Qué tipo de cambio usamos? ¿Comprador y vendedor, o busco el divisa del BNA?'
+      ? ' ¿Te busco el tipo de cambio o lo cargás vos?'
       : ' ¿A qué precio vendés ' + gl + '?';
     agregarMensaje(m, 'bot');
     return;
