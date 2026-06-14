@@ -3250,10 +3250,12 @@ function flujoEstado(){
 
   // ---- OPERACIÓN SIMPLE ----
   if(!cargado('grano')) return est('S_GRANO', 'Falta el grano. Preguntá qué grano va a vender. Cargá "grano".');
-  // CANJE SIN DEUDA: el canje cancela una deuda; sin deuda el reparto da CERO.
+  // CANJE SIN DEUDA: solo es un problema en modo IMPORTE (sin deuda no hay nada que cubrir).
+  // En modo KILOS con "Todo canje", las toneladas se liquidan y el neto queda a favor
+  // en la cuenta corriente: es una operación válida y NO se pide deuda.
   const destSel = (typeof dest!=='undefined') ? dest : 'auto';
   const hayDeudaCargada = ((typeof pv==='function') && ((pv('deuda_usd')||0)>0 || (pv('deuda_ars')||0)>0));
-  if(destSel==='canje' && !hayDeudaCargada){
+  if(esImporte && destSel==='canje' && !hayDeudaCargada){
     return est('S_CANJE_SIN_DEUDA', 'El destino está en CANJE pero NO hay deuda cargada, y el canje cancela una deuda: así el resultado da cero. Preguntá cuánto cancela (cargá "deuda_usd" o "deuda_ars"). Si en realidad no cancela nada, mandá "dest": "auto".');
   }
   if(esImporte){
@@ -3765,7 +3767,9 @@ Operación POR MONTOS: dos o más granos, cada uno cubre un monto fijo que dijo 
 </montos_relativos>
 
 <destino>
-Si el usuario dice que la operación es "para canje" / "en canje" / "todo a pago", mandá "dest": "canje" (o "pago") apenas lo diga, junto con los demás campos. NO lo ignores: cambia toda la liquidación. Recordá que el canje cancela una deuda: si no hay deuda cargada, el sistema te va a pedir que la preguntes.
+Si el usuario dice que la operación es "para canje" / "en canje" / "todo a pago" / "todo canje", mandá "dest": "canje" (o "pago") apenas lo diga, junto con los demás campos. NO lo ignores: cambia toda la liquidación.
+En modo KILOS (tiene toneladas), "Todo canje" es válido SIN deuda: las toneladas se liquidan y el neto queda a favor en la cuenta corriente. NO pidas deuda en ese caso. Si el usuario dice "va todo a canje", "se liquida el saldo", "el resultado va a canje" o "queda a favor en cuenta corriente", ya está: mandá "dest": "canje" y seguí con las condiciones (comisión, factor, recibo). NO insistas con el monto de la deuda.
+Solo en modo IMPORTE (te pide cuántas toneladas necesita para cubrir algo) el canje necesita una deuda: ahí sí preguntá cuánto cancela. Si no hay deuda y no es importe, no la pidas.
 </destino>
 
 <buscar_web>
