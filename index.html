@@ -4211,6 +4211,16 @@ function procesarRespuesta(texto){
   }
   const c = obj.campos || {};
 
+  // ── [DEBUG] Log de diagnóstico: qué campos manda Liza en cada turno ──
+  // Sirve para cazar valores fantasma (deuda/cobrar inflados que aparecen sin
+  // que el usuario los cargue). Mirar la consola (F12) cuando algo salga raro.
+  console.log('[Liza] campos recibidos:', JSON.stringify(c));
+  if(c.deuda_usd!==undefined || c.deuda_ars!==undefined || c.cobrar_usd!==undefined || c.cobrar_ars!==undefined){
+    console.warn('[Liza] MONTOS CRÍTICOS →',
+      'deuda_usd:', c.deuda_usd, '| deuda_ars:', c.deuda_ars,
+      '| cobrar_usd:', c.cobrar_usd, '| cobrar_ars:', c.cobrar_ars);
+  }
+
   // ── CANDADO ANTI-NARRACIÓN DE BÚSQUEDA ──
   // Si Liza dice que va a buscar pero NO mandó "buscar_web" (le pasa cuando el
   // mismo turno trae también campos para cargar), el sistema la obliga a mandar
