@@ -3664,13 +3664,14 @@ PROHIBIDO decir "cargué", "listo, queda en..." o similar sobre un dato que NO m
 
 <deteccion_tipo_operacion>
 Antes de arrancar, detectá el tipo:
-SIMPLE = un solo grano. "Quiero liquidar 800 tn de soja" o "cuántas tn necesito para cancelar 50000 USD".
+SIMPLE = UN SOLO grano. "Quiero liquidar 800 tn de soja", "cuántas tn necesito para cancelar 50000 USD", "tengo que cancelar 300000 dólares con 300 tn de girasol". Cancelar una deuda con UN grano es SIMPLE (modo importe o kilos), NO compleja. Tener una deuda NO la hace compleja.
+REGLA TAXATIVA: si el usuario nombró UN SOLO grano, es SIMPLE. NUNCA mandes op_compleja_iniciar, NUNCA inventes un grano2, NUNCA pongas el mismo grano como grano2. La operación compleja requiere DOS granos DISTINTOS explícitamente nombrados por el usuario. Si solo hay un grano, usá <flujo_simple>.
 POR MONTOS = dos o más granos y CADA UNO tiene su monto propio asignado (no hay "resto"). Señales: "cancelo 13 millones con soja y 23 millones con maíz", "5000 USD con trigo y 8000 con cebada". Usá <flujo_montos>.
-COMPLEJA = dos granos donde el segundo cubre EL RESTO / EL SALDO. Dos variantes:
+COMPLEJA = DOS granos DISTINTOS donde el segundo cubre EL RESTO / EL SALDO. Requiere que el usuario nombre los dos granos. Dos variantes:
 · TONELADAS FIJAS + RESTO: "tengo 80 tn de soja y el resto con girasol", "el saldo lo hago con maíz".
 · MONTO FIJO + RESTO: solo el PRIMER grano tiene monto y el segundo cubre lo que falta: "de la deuda, 13 millones los cancelo con soja y el resto con maíz".
-· TONELADAS EN LOS DOS GRANOS: una deuda única y toneladas FIJAS de cada grano ("tengo que cancelar 1 millón de dólares, tengo 750 tn de girasol y 368 de soja"). NO es POR MONTOS: no hay un monto por grano, hay UNA deuda y dos lotes de toneladas.
-Si a mitad de la charla menciona un segundo grano: si le asigna un monto propio es POR MONTOS; si dice "el resto" o "el saldo" es COMPLEJA. Cambiá de flujo sin perder los datos ya cargados.
+· TONELADAS EN LOS DOS GRANOS: una deuda única y toneladas FIJAS de cada grano ("tengo que cancelar 1 millón de dólares, tengo 750 tn de girasol y 368 de soja"). Acá hay DOS granos distintos (girasol Y soja). NO es POR MONTOS: no hay un monto por grano, hay UNA deuda y dos lotes de toneladas. PERO si solo hay UN grano (aunque haya deuda y toneladas), es SIMPLE.
+Si a mitad de la charla menciona un SEGUNDO grano distinto: si le asigna un monto propio es POR MONTOS; si dice "el resto" o "el saldo" es COMPLEJA. Cambiá de flujo sin perder los datos ya cargados.
 </deteccion_tipo_operacion>
 
 <deteccion_modo>
@@ -4786,6 +4787,25 @@ function procesarRespuesta(texto){
     return;
   }
   // ── OPERACIÓN COMPLEJA (máquina de estados en código) ──
+  if(c.op_compleja_iniciar){
+    const t0 = c.op_compleja_iniciar;
+    // GUARDRAIL: la operación compleja necesita DOS granos DISTINTOS. Si el modelo
+    // manda grano2 igual al grano principal (o sin grano2 válido), es un error de
+    // interpretación: NO iniciamos compleja, dejamos que siga como operación simple.
+    const granoPpal = (c.grano || '').toLowerCase();
+    const g2 = (t0.grano2 || '').toLowerCase();
+    if(!g2 || g2===granoPpal){
+      console.warn('[Liza] op_compleja_iniciar ignorada: grano2 inválido o igual al principal. Se trata como SIMPLE.', JSON.stringify(t0));
+      // Rescatamos la deuda/cobro que venían dentro del op_compleja para que la operación SIMPLE los use.
+      if(t0.deuda_usd!==undefined && c.deuda_usd===undefined) c.deuda_usd = t0.deuda_usd;
+      if(t0.deuda_ars!==undefined && c.deuda_ars===undefined) c.deuda_ars = t0.deuda_ars;
+      if(t0.cobrar_usd!==undefined && c.cobrar_usd===undefined) c.cobrar_usd = t0.cobrar_usd;
+      if(t0.cobrar_ars!==undefined && c.cobrar_ars===undefined) c.cobrar_ars = t0.cobrar_ars;
+      // Si hay deuda/cobro pero no se aclaró modo, es importe (cuántas tn para cubrir) salvo que ya tenga k_total.
+      if((c.deuda_usd||c.deuda_ars||c.cobrar_usd||c.cobrar_ars) && c.k_total===undefined && c.modo===undefined) c.modo='importe';
+      delete c.op_compleja_iniciar; // se ignora; los demás campos (grano, k_total, deuda) se aplican normal abajo
+    }
+  }
   if(c.op_compleja_iniciar){
     opMontosFin(); // no conviven las dos máquinas
     const t = c.op_compleja_iniciar;
