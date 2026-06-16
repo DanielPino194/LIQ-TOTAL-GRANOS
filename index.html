@@ -3899,6 +3899,15 @@ async function buscarTCDirectoAPI(ahoraParam){
     return {compra:c, venta:v};
   };
   const dd = d => ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
+  // Feriados nacionales argentinos (no hay cotización mayorista esos días).
+  // Formato 'MM-DD'. ACTUALIZAR cada año. Fuente: argentina.gob.ar/feriados.
+  const FERIADOS_AR = [
+    '01-01','02-16','02-17','03-24','04-02','04-03','05-01','05-25',
+    '06-15','06-20','07-09','08-17','10-12','11-23','12-08','12-25'
+  ];
+  const esFeriado = d => FERIADOS_AR.includes(
+    ('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)
+  );
   // Cierre de un día puntual (ArgentinaDatos, serie histórica)
   const cierreDe = async (d, vigencia)=>{
     const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), di=('0'+d.getDate()).slice(-2);
@@ -3920,7 +3929,7 @@ async function buscarTCDirectoAPI(ahoraParam){
     // y feriados sin dato, hasta 6 intentos).
     let d = new Date(ahora); d.setDate(d.getDate()-1);
     for(let i=0; i<6; i++){
-      while(d.getDay()===0 || d.getDay()===6) d.setDate(d.getDate()-1);
+      while(d.getDay()===0 || d.getDay()===6 || esFeriado(d)) d.setDate(d.getDate()-1);
       try{ return await cierreDe(d); }
       catch(e){ d.setDate(d.getDate()-1); }
     }
