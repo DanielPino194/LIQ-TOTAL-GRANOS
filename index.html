@@ -3388,7 +3388,7 @@ function gemMic(){
 
 // Borra los datos cargados en la app (vuelve a valores por defecto)
 // SIN borrar el chat ni el historial: mantiene el contexto de la conversación
-function gemBorrarTodo(){
+function gemBorrarTodo(borradoTotal){
   const defaults = {
     precio:'380', k_total:'0', tc:'1400', tc_vendedor:'1420',
     factor:'100', com:'2', deuda_usd:'0', deuda_ars:'0',
@@ -3425,7 +3425,13 @@ function gemBorrarTodo(){
   // Avisar a Gemini que los datos se borraron, para que NO arrastre los viejos.
   // Mantenemos el hilo del chat, pero marcamos un corte de operación en el historial.
   if(Array.isArray(gemHistorial)){
-    gemHistorial.push({role:'user', parts:[{text:'(Sistema: se borraron los CAMPOS de la app y volvieron a sus valores por defecto: precio 380, factor 100, comisión 2 por ciento, grano soja, tipo de cambio 1400/1420, sin toneladas, sin deuda y sin importe a cobrar. No reutilices automáticamente los valores de la operación anterior en los campos. PERO si estás en medio de una OPERACIÓN COMPLEJA de dos granos, SÍ recordás el saldo pendiente que calculaste, para cargar ahora el segundo grano en modo importe con ese saldo como deuda/importe a cobrar. Si no es una operación compleja, esperá a que el usuario te dé los datos nuevos.)'}]});
+    if(borradoTotal){
+      // Borrado TOTAL: se olvida todo, incluida cualquier operación compleja en curso.
+      gemHistorial.push({role:'user', parts:[{text:'(Sistema: BORRADO TOTAL. Se borraron todos los campos y se canceló cualquier operación en curso (simple, por montos o compleja). NO recuerdes saldos ni granos anteriores. NO sigas ninguna operación compleja previa. Arrancá de cero: esperá a que el usuario te dé los datos de la nueva operación.)'}]});
+    } else {
+      // Avance de paso (operación por montos o compleja): se limpian campos pero el flujo sigue.
+      gemHistorial.push({role:'user', parts:[{text:'(Sistema: se borraron los CAMPOS de la app y volvieron a sus valores por defecto: precio 380, factor 100, comisión 2 por ciento, grano soja, tipo de cambio 1400/1420, sin toneladas, sin deuda y sin importe a cobrar. No reutilices automáticamente los valores de la operación anterior en los campos. PERO si estás en medio de una OPERACIÓN COMPLEJA de dos granos, SÍ recordás el saldo pendiente que calculaste, para cargar ahora el segundo grano en modo importe con ese saldo como deuda/importe a cobrar. Si no es una operación compleja, esperá a que el usuario te dé los datos nuevos.)'}]});
+    }
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'Listo, borré todo. Arrancamos de cero. ¿Qué operación querés hacer?'})}]});
   }
   // NO reinicia el chat visual: los mensajes se mantienen
@@ -4299,8 +4305,9 @@ function procesarRespuesta(texto){
 
   // Si el usuario pidió borrar/empezar de nuevo (limpia campos, mantiene el chat)
   if(c.reiniciar){
-    opMontosFin(); // un reinicio corta también la operación por montos
-    if(typeof gemBorrarTodo==='function') gemBorrarTodo();
+    opMontosFin();    // un reinicio corta la operación por montos
+    opComplejaFin();  // y también la operación compleja (si no, queda estado sucio)
+    if(typeof gemBorrarTodo==='function') gemBorrarTodo(true); // borrado TOTAL: olvida todo
     agregarMensaje(obj.mensaje || 'Listo, borré todo. Contame la nueva operación.', 'bot');
     return;
   }
