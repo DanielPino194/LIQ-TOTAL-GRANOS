@@ -4531,18 +4531,34 @@ function procesarRespuesta(texto){
       return;
     }
     const ud = unidadTotal ? '' : ' /tn';
-    let msgD = 'Desglose ' + (unidadTotal ? 'en TOTALES' : 'por tonelada') + ' (sobre ' + gvT('res_kilos').trim() + ' tn), línea por línea de la liquidación:\n'
-      + '· Importe bruto (sin IVA): ' + fVal(bruto) + ud + conUSD(bruto) + '\n'
-      + '· IVA (10,5%): ' + fVal(iva) + ud + conUSD(iva) + '\n'
-      + '· Total deducciones: ' + fVal(deduc) + ud + conUSD(deduc) + '\n'
-      + '· Total retenciones: ' + fVal(reten) + ud + conUSD(reten) + '\n'
-      + '· Total a pagar de la liquidación: ' + fVal(aPagar) + ud + conUSD(aPagar) + '\n'
-      + (gastosRecibo>0 ? '· Gastos de recibo y fletes (c/IVA): ' + fVal(gastosRecibo) + ud + conUSD(gastosRecibo) + '\n' : '')
-      + '· NETO de todos los gastos (antes de la deuda): ' + fVal(recT+deudaT) + ud + conUSD(recT+deudaT) + '\n'
-      + (deudaT>0 ? '· Va a la deuda' + (parcial?' (lo que cubrís)':'') + ': ' + fVal(cubierto) + ud + ' (cubre ' + fD(cubierto) + ' de ' + fD(deudaT) + ')\n' : '')
-      + (parcial ? '· SALDO de deuda SIN cubrir: ' + fD(saldoSin) + (tcVdes>0 ? ' (unos ' + fUSD(saldoSin/tcVdes) + ' al vendedor)' : '') + '\n' : '')
-      + '· Lo que recibís: ' + (parcial ? fD(0) + ' (la deuda no llega a cubrirse)' : fVal(recT) + ud + conUSD(recT)) + '\n'
-      + 'Cada línea sale de las celdas del panel de la liquidación' + (enUSD && tcComp>0 ? '; los USD son al TC comprador ' + fD(tcComp) : '') + '.';
+    const sep = '──────────────';
+    const netoGastos = recT + deudaT; // neto antes de la deuda
+    // Encabezado
+    let msgD = '📋 Liquidación · ' + gvT('res_kilos').trim() + ' tn\n\n';
+    // Cuerpo: líneas esenciales. Los descuentos van con signo (-) para que se lea claro.
+    msgD += 'Precio bruto: ' + fVal(bruto) + ud + conUSD(bruto) + '\n';
+    msgD += 'IVA (10,5%): ' + fVal(iva) + ud + '\n';
+    if(deduc>0)  msgD += 'Deducciones: -' + fVal(deduc) + ud + '\n';
+    if(reten>0)  msgD += 'Retenciones: -' + fVal(reten) + ud + '\n';
+    if(gastosRecibo>0) msgD += 'Gastos y fletes: -' + fVal(gastosRecibo) + ud + '\n';
+    msgD += sep + '\n';
+    msgD += 'Neto: ' + fVal(netoGastos) + ud + conUSD(netoGastos) + '\n\n';
+    // Cierre según el caso de la operación
+    if(deudaT<=0){
+      // Sin deuda: liquidación directa
+      msgD += 'Total: ' + fD(netoGastos);
+    } else if(parcial){
+      // Las toneladas no alcanzan a cubrir la deuda
+      msgD += 'Cubrís ' + fD(cubierto) + ' de la deuda de ' + fD(deudaT) + '.\n';
+      msgD += 'Falta cubrir ' + fD(saldoSin) + (tcVdes>0 ? ' (unos ' + fUSD(saldoSin/tcVdes) + ' al vendedor)' : '') + '.';
+    } else if(recT>0){
+      // Cubre la deuda y sobra plata a favor
+      msgD += 'Cubrís la deuda de ' + fD(deudaT) + '.\n';
+      msgD += 'Recibís ' + fD(recT) + ' a favor.';
+    } else {
+      // Cubre exactamente, no queda saldo
+      msgD += 'Cubre exactamente la deuda de ' + fD(deudaT) + '.\nNo queda saldo.';
+    }
     agregarMensaje(msgD, 'bot');
     gemHistorial.push({role:'user', parts:[{text:'(Sistema: se imprimió el desglose por tonelada calculado por el código. NO repitas ni reinterpretes esos números. Si el usuario pregunta por otro valor por tonelada, mandá desglose_tn: true de nuevo.)'}]});
     gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(desglose impreso por el sistema)'})}]});
