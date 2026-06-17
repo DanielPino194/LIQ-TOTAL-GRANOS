@@ -4473,11 +4473,15 @@ function procesarRespuesta(texto){
     // Espejo LITERAL del panel de la liquidación, línea por línea (cada valor es
     // la celda real dividida por las toneladas: verificable contra la pantalla).
     const gastosRecibo = numD(gvT('res_gastos')); // gastos de recibo + fletes, c/IVA (celda real del panel)
-    const bruto    = numD(gvT('c_bruto')) + numD(gvT('p_bruto'));
-    const iva      = numD(gvT('c_iva')) + numD(gvT('p_iva'));
-    const deduc    = numD(gvT('c_total_ded')) + numD(gvT('p_total_ded'));
-    const reten    = numD(gvT('c_total_ret')) + numD(gvT('p_total_ret'));
-    const aPagar   = numD(gvT('c_total_pagar')) + numD(gvT('p_total_pagar'));
+    const bruto    = numD(gvT('c_bruto')) + numD(gvT('p_bruto'));   // bruto sin IVA (canje+pago)
+    const iva      = numD(gvT('c_iva'))   + numD(gvT('p_iva'));     // IVA (canje+pago)
+    const deduc    = numD(gvT('res_d_total'));   // Total deducciones del resumen (canje+pago)
+    // Retenciones: el neto descuenta el Total retenciones MÁS el IIBB (que en el cálculo
+    // se resta una vez extra). Para que el detalle cierre con el neto, la línea de
+    // retenciones incluye ese IIBB. No se muestra aparte: es parte de las retenciones.
+    const retenBase= numD(gvT('res_r_total'));   // Total retenciones del resumen
+    const iibbExtra= numD(gvT('res_r_iibb'));    // IIBB que el neto descuenta una vez más
+    const reten    = retenBase + iibbExtra;
     const deudaT   = numD(gvT('res_deuda'));
     const recT     = numD(gvT('res_recibis'));
     const fD = n => (typeof ars==='function') ? ars(Math.round(n)||0) : (Math.round(n)||0);
@@ -4495,8 +4499,7 @@ function procesarRespuesta(texto){
       bruto:        ['Importe bruto (sin IVA)', bruto],
       iva:          ['IVA (10,5%)', iva],
       deducciones:  ['Total deducciones', deduc],
-      retenciones:  ['Total retenciones', reten],
-      a_pagar:      ['Total a pagar de la liquidación (sin gastos de recibo ni deuda)', aPagar],
+      retenciones:  ['Total retenciones (incluye IIBB)', reten],
       gastos_recibo:['Gastos de recibo y fletes (c/IVA)', gastosRecibo],
       neto_gastos:  ['NETO de todos los gastos (lo que queda antes de la deuda)', recT + deudaT],
       deuda:        [parcial ? 'Va a la deuda (lo que CUBRÍS con estas toneladas)' : 'Va a la deuda', cubierto],
