@@ -3787,7 +3787,13 @@ Operación POR MONTOS: dos o más granos, cada uno cubre un monto fijo que dijo 
 </montos_relativos>
 
 <destino>
-Si el usuario dice que la operación es "para canje" / "en canje" / "todo a pago" / "todo canje", mandá "dest": "canje" (o "pago") apenas lo diga, junto con los demás campos. NO lo ignores: cambia toda la liquidación.
+Hay TRES destinos posibles (botones de la app): "auto", "canje", "pago".
+· AUTO (default): cancela la deuda con CANJE y el RESTO se cobra (pago). Es el reparto automático.
+  Señales de AUTO: "cancelo X y el resto lo cobro", "si sobra lo cobro", "cubrí la deuda y el resto a pago", "lo que sobre que se pague". Si el usuario CANCELA una deuda Y dice que cobra/recibe el sobrante, mandá "dest": "auto" (o no mandes dest, que auto es el default). NUNCA mandes "pago" en este caso: "pago" cobraría TODO sin cancelar la deuda con canje.
+· TODO CANJE: "todo a canje", "todo en canje", "va todo a canje". Mandá "dest": "canje".
+· TODO PAGO: "todo a pago", "todo lo cobro", "cobro todo", "nada a canje". Mandá "dest": "pago". Esto NO cancela deuda con canje: cobra el total.
+Regla clave: "cancelo una deuda Y cobro el resto" = AUTO, no pago. Solo es "pago" si el usuario NO quiere cancelar nada con canje (cobra todo).
+Si el usuario dice que la operación es "para canje" / "en canje" / "todo a pago" / "todo canje", mandá "dest" apenas lo diga, junto con los demás campos. NO lo ignores: cambia toda la liquidación.
 En modo KILOS (tiene toneladas), "Todo canje" es válido SIN deuda: las toneladas se liquidan y el neto queda a favor en la cuenta corriente. NO pidas deuda en ese caso. Si el usuario dice "va todo a canje", "se liquida el saldo", "el resultado va a canje" o "queda a favor en cuenta corriente", ya está: mandá "dest": "canje" y seguí con las condiciones (comisión, factor, recibo). NO insistas con el monto de la deuda.
 Solo en modo IMPORTE (te pide cuántas toneladas necesita para cubrir algo) el canje necesita una deuda: ahí sí preguntá cuánto cancela. Si no hay deuda y no es importe, no la pidas.
 </destino>
