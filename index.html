@@ -4492,9 +4492,7 @@ function procesarRespuesta(texto){
     // Retenciones: el neto descuenta el Total retenciones MÁS el IIBB (que en el cálculo
     // se resta una vez extra). Para que el detalle cierre con el neto, la línea de
     // retenciones incluye ese IIBB. No se muestra aparte: es parte de las retenciones.
-    const retenBase= numD(gvT('res_r_total'));   // Total retenciones del resumen
-    const iibbExtra= numD(gvT('res_r_iibb'));    // IIBB que el neto descuenta una vez más
-    const reten    = retenBase + iibbExtra;
+    const reten    = numD(gvT('res_r_total'));   // Total retenciones del resumen (incluye IIBB, una sola vez)
     const deudaT   = numD(gvT('res_deuda'));
     const recT     = numD(gvT('res_recibis'));
     const fD = n => (typeof ars==='function') ? ars(Math.round(n)||0) : (Math.round(n)||0);
