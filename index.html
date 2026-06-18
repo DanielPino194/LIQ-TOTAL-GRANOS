@@ -3229,7 +3229,7 @@ function flujoEstado(){
       if(opCompleja.saldoMostrado){
         if(opCompleja.kTotal2>0) return est('C_PRECIO2', 'El segundo grano tiene TONELADAS FIJAS ('+opCompleja.kTotal2+' tn): NO preguntes qué cubrir. Cuando el usuario dé el precio del segundo grano, mandá "op_compleja_paso2": true con grano y precio. No preguntes otra cosa.');
         if(!opCompleja.cubrir2) return est('C_CUBRIR', 'El usuario debe elegir qué cubrir con el segundo grano. Según responda, mandá "op_compleja_cubrir": "deuda" o "todo".');
-        return est('C_PRECIO2', 'Ya está elegido qué cubrir. Cuando el usuario dé el precio del segundo grano, mandá "op_compleja_paso2": true con grano y precio. No preguntes otra cosa.');
+        return est('C_PRECIO2', 'Ya está elegido qué cubrir. Cuando el usuario dé el precio del segundo grano, mandá "op_compleja_paso2": true con grano y precio. DESPUÉS seguí preguntando las condiciones del segundo grano UNA por turno (comisión, factor, recibo): cargá cada una como campo normal (com, factor, etc.) a medida que el usuario responda. El sistema te va a indicar qué falta.');
       }
       if(!cargado('grano')) return est('C1_GRANO', 'Falta el PRIMER grano. Preguntá: "¿Qué grano vas a vender primero?". Cargalo con "grano".');
       if(!opCompleja.montoFijo1 && !cargado('k_total')) return est('C1_TN', 'Faltan las toneladas del primer grano. Preguntá cuántas toneladas tiene. Cargá "k_total".');
