@@ -1408,7 +1408,7 @@ function liq(k,tipo,p){
   const rib=bruto*0.0075;
   const rg=ec?0:!p.rog?Math.max(0,(bruto-ct-MNI)*0.15):Math.max(0,(bruto-ct-MNI)*0.02);
   const tr=ri+rib+rg;
-  const tp=total-td-tr-rib;
+  const tp=total-td-tr; // tr YA incluye el IIBB (rib); antes se restaba rib otra vez (doble IIBB) — corregido
   const cbu=(tipo==='pago'&&p.rog)?(bruto-ct)*0.025:0;
   return{bruto,total,cb,ct,sel,der,hon,td,ri,rib,rg,tr,tp,cbu,imp:tp-cbu,kNeto,kBruto:k};
 }
