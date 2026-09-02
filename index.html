@@ -3661,7 +3661,7 @@ En resumen: no te adelantás con cifras al cargar/recalcular, pero cuando te pre
 </regla_cifras>
 
 <claves_validas>
-grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), plus_usd, plus_ars_input, factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano, desglose_tn, desglose_unidad, desglose_moneda.
+grano (soja/maiz/trigo/cebada/girasol), k_total, precio, precio_moneda (usd/ars), plus_usd, plus_ars_input, factor, tc, tc_vendedor, com, deuda_usd, deuda_ars, cobrar_usd, cobrar_ars, modo (kilos/importe), dest, g_paritarias, g_secada, g_fumigada, hum_recibo, puntos_libres, flete_corto, flete_largo, flete_corto_km, flete_largo_km, flete_corto_aj, flete_largo_aj, flete_largo_tipo, flete_corto_moneda, flete_largo_moneda, buscar_web, reiniciar, generar_pdf, mostrar_resultado, op_compleja_iniciar, op_compleja_cubrir, op_compleja_paso2, op_compleja_calcular_saldo, op_compleja_cerrar, op_montos_iniciar, op_montos_siguiente, op_montos_continuar, op_montos_editar, op_montos_actualizar, op_compleja_editar_paso, op_compleja_recalcular, pdf_grano, desglose_tn, desglose_unidad, desglose_moneda, consultar_tarifa.
 </claves_validas>
 
 <regla_de_hierro_campos>
@@ -3833,6 +3833,8 @@ EJEMPLOS (copiá la estructura EXACTA):
 AMBIGÜEDAD: si el usuario dice "flete" con un valor pero SIN decir cuál (ej: "flete 360 km", "flete 15 dólares"), NO adivines: preguntá "¿flete corto, largo o directo?" antes de cargar nada.
 KM POR LOCALIDADES: si da dos lugares en vez de km (ej: "de Pergamino al puerto de Rosario"), mandá "buscar_web": "distancia en km por ruta de [origen] a [destino] en camión". El sistema carga los km en el flete que corresponda. No inventes los km vos.
 CONFIRMACIÓN: al confirmar un flete decí SIEMPRE cuál cargaste y cómo: "cargué el flete DIRECTO, tarifa fija de 15 USD/tn" o "cargué el flete CORTO por 20 km". Nunca digas solo "cargué el flete".
+
+CONSULTA DE TARIFA (solo informativa, NO carga nada): si el usuario PREGUNTA qué tarifa hay para una distancia (ej: "¿qué tarifa hay para 350 km?", "¿cuánto es la tarifa de 500 km?"), mandá "consultar_tarifa": {"km": 350}. Si menciona un ajuste (ej: "para 350 km menos 10%"), agregalo: "consultar_tarifa": {"km": 350, "aj": -10}. El SISTEMA responde la tarifa; vos NO pongas ningún número en tu mensaje. Esto es una CONSULTA: NO carga el flete en la operación, no toca la simulación. Es distinto de cargar un flete (ahí usás flete_corto_km / flete_largo_km). Si el usuario pregunta la tarifa entre DOS localidades (ej: "¿qué tarifa hay de Pergamino a Rosario?"), mandá EN EL MISMO JSON: "buscar_web": "distancia en km por ruta de [origen] a [destino] en camión" Y "consultar_tarifa": true (mensaje: "Dame un segundo que busco la distancia."). El sistema busca los km y responde la tarifa solo; NO carga nada. NUNCA inventes la tarifa ni los km.
 </flete>
 
 <estado_actual>
@@ -4377,7 +4379,7 @@ function procesarRespuesta(texto){
       setFleteCampo('g_flete_corto', c.flete_corto, c.flete_corto_moneda);
     }
     if(c.flete_largo!==undefined){
-      if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+      if(typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo || 'largo');
       if(typeof setFleteModo==='function') setFleteModo('salida','tarifa');
       setFleteCampo('g_flete_largo', c.flete_largo, c.flete_largo_moneda);
     }
@@ -4387,7 +4389,7 @@ function procesarRespuesta(texto){
       setInputVal('g_flete_corto_km', c.flete_corto_km);
     }
     if(c.flete_largo_km!==undefined){
-      if(c.flete_largo_tipo && typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo);
+      if(typeof setFleteTipo==='function') setFleteTipo(c.flete_largo_tipo || 'largo');
       if(typeof setFleteModo==='function') setFleteModo('salida','km');
       setInputVal('g_flete_largo_km', c.flete_largo_km);
     }
@@ -4413,7 +4415,7 @@ function procesarRespuesta(texto){
     document.getElementById('gem-msgs').appendChild(loading);
     scrollMsgs();
     // Búsqueda en vuelo: mientras no vuelva, Liza tiene PROHIBIDO inventar el dato
-    window._busquedaEnCurso = { consulta: ''+c.buscar_web, desde: Date.now() };
+    window._busquedaEnCurso = { consulta: ''+c.buscar_web, desde: Date.now(), esConsultaTarifa: !!c.consultar_tarifa };
     window._reintentoBusqueda = false;
 
     // Si es una distancia, intentamos PRIMERO Google Maps (número exacto).
@@ -4429,6 +4431,25 @@ function procesarRespuesta(texto){
       if(od){
         BUSQUEDA_WEB.distanciaMaps(od.origen, od.destino)
           .then(r=>{
+            // Si la búsqueda era una CONSULTA de tarifa (no carga), respondemos la
+            // tarifa CATAC de esos km y NO ruteamos a Liza para cargar el flete.
+            if(window._busquedaEnCurso && window._busquedaEnCurso.esConsultaTarifa){
+              window._busquedaEnCurso = null;
+              document.getElementById('gem-loading-web')?.remove();
+              const km = r.km;
+              let m;
+              if(km>=1 && km<=1000 && typeof CATAC!=='undefined'){
+                const tarifa = CATAC[km] || 0;
+                const fT = (typeof f==='function') ? f(tarifa,2) : Math.round(tarifa);
+                m = 'De ' + r.origen + ' a ' + r.destino + ' son unos ' + km + ' km por ruta. La tarifa CATAC (abril 2026) es $ ' + fT + '/tn. Es solo una consulta, no la cargué en la operación.';
+              } else {
+                m = 'De ' + r.origen + ' a ' + r.destino + ' son unos ' + km + ' km, pero la tabla CATAC va de 1 a 1000 km, así que ese tramo queda fuera de tabla.';
+              }
+              agregarMensaje(m, 'bot');
+              gemHistorial.push({role:'user', parts:[{text:'(Sistema: se respondió una CONSULTA de tarifa por localidades, calculada por el código. NO se cargó nada. NO repitas ni reinterpretes el número.)'}]});
+              gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(consulta de tarifa impresa por el sistema)'})}]});
+              return;
+            }
             // Resultado de Maps en el mismo formato que espera rutearResultado,
             // e incluye la palabra "ruta" y los km para que el ruteo lo cargue bien.
             finalizarBusqueda('Distancia por ruta (Google Maps) de '+r.origen+' a '+r.destino+': '+r.km+' km.');
@@ -4471,6 +4492,35 @@ function procesarRespuesta(texto){
     return;
   }
   // ── DESGLOSE POR TONELADA IMPRESO POR EL CÓDIGO (Liza no elige ni etiqueta números) ──
+  // ── CONSULTA DE TARIFA (informativa, NO carga nada en la operación) ──
+  // El usuario pregunta "¿qué tarifa para 350 km?" en medio de una simulación.
+  // El código lee la tabla CATAC y responde. NO modifica ningún input ni el estado.
+  // Para consulta por dos localidades, Liza manda buscar_web y el ruteo de km
+  // (marcado como consulta) devuelve acá con los km ya resueltos por Maps.
+  if(c.consultar_tarifa){
+    const ct = c.consultar_tarifa;
+    let km = 0, aj = 0;
+    if(typeof ct === 'object' && ct !== null){
+      km = parseInt(ct.km) || 0;
+      aj = parseFloat(ct.aj) || 0;
+    } else {
+      km = parseInt(ct) || 0;
+    }
+    if(km >= 1 && km <= 1000 && typeof CATAC !== 'undefined'){
+      const base = CATAC[km] || 0;
+      const tarifa = base * (1 + aj/100);
+      const fT = (typeof f === 'function') ? f(tarifa, 2) : Math.round(tarifa);
+      let m = 'Para ' + km + ' km, la tarifa CATAC (abril 2026) es $ ' + fT + '/tn';
+      if(aj !== 0) m += ' (con ajuste ' + (aj>0?'+':'') + aj + '%)';
+      m += '. Es solo una consulta, no la cargué en la operación.';
+      agregarMensaje(m, 'bot');
+    } else {
+      agregarMensaje('La tabla CATAC va de 1 a 1000 km. Ese valor de km queda fuera de rango, así que no tengo la tarifa.', 'bot');
+    }
+    gemHistorial.push({role:'user', parts:[{text:'(Sistema: se respondió una CONSULTA de tarifa CATAC, calculada por el código. NO cargaste nada en la operación. NO repitas ni reinterpretes el número.)'}]});
+    gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje:'(consulta de tarifa impresa por el sistema)'})}]});
+    return;
+  }
   if(c.desglose_tn){
     aplicarCamposBasicos(c); // si vino un cambio en el mismo turno, el desglose lo refleja
     if(typeof calcular==='function') calcular();
