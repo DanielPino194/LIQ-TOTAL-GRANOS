@@ -3835,6 +3835,7 @@ KM POR LOCALIDADES: si da dos lugares en vez de km (ej: "de Pergamino al puerto 
 CONFIRMACIÓN: al confirmar un flete decí SIEMPRE cuál cargaste y cómo: "cargué el flete DIRECTO, tarifa fija de 15 USD/tn" o "cargué el flete CORTO por 20 km". Nunca digas solo "cargué el flete".
 
 CONSULTA DE TARIFA (solo informativa, NO carga nada): si el usuario PREGUNTA qué tarifa hay para una distancia (ej: "¿qué tarifa hay para 350 km?", "¿cuánto es la tarifa de 500 km?"), mandá "consultar_tarifa": {"km": 350}. Si menciona un ajuste (ej: "para 350 km menos 10%"), agregalo: "consultar_tarifa": {"km": 350, "aj": -10}. El SISTEMA responde la tarifa; vos NO pongas ningún número en tu mensaje. Esto es una CONSULTA: NO carga el flete en la operación, no toca la simulación. Es distinto de cargar un flete (ahí usás flete_corto_km / flete_largo_km). Si el usuario pregunta la tarifa entre DOS localidades (ej: "¿qué tarifa hay de Pergamino a Rosario?"), mandá EN EL MISMO JSON: "buscar_web": "distancia en km por ruta de [origen] a [destino] en camión" Y "consultar_tarifa": true (mensaje: "Dame un segundo que busco la distancia."). El sistema busca los km y responde la tarifa solo; NO carga nada. NUNCA inventes la tarifa ni los km.
+TARIFA CATAC = LA CALCULA LA APP: la tabla CATAC está DENTRO de la app. La tarifa NUNCA se busca en la web: no mandes "buscar_web" para una tarifa (solo para sacar los km entre dos localidades). Si el usuario pide la tarifa de un flete ya cargado por km, o aplica un ajuste ("menos 15%"), mandá el campo que corresponda (ej: flete_largo_aj: -15) y confirmá en palabras: el SISTEMA muestra la tarifa calculada. Si no hay km cargados, preguntá los km o las localidades. NUNCA digas "voy a buscar la tarifa", ni que no podés calcular tarifas o ajustes, ni que "solo podés buscar dólar y distancias".
 </flete>
 
 <estado_actual>
@@ -4256,6 +4257,21 @@ function procesarRespuesta(texto){
   // Si Liza dice que va a buscar pero NO mandó "buscar_web" (le pasa cuando el
   // mismo turno trae también campos para cargar), el sistema la obliga a mandar
   // la clave en el acto. Un solo reintento automático, invisible para el usuario.
+  // EXCEPCIÓN: si lo que "iba a buscar" es una TARIFA de flete, no se busca en la web:
+  // se aplican los campos del turno (ej: el ajuste) y el código responde la tarifa CATAC.
+  if(!c.buscar_web && obj.mensaje && esTemaTarifa(obj.mensaje)
+     && /dame un segundo|lo busco|busco|buscar/i.test(obj.mensaje)){
+    aplicarCamposBasicos(c);
+    if(typeof calcular==='function') calcular();
+    const confirmacion = obj.mensaje
+      .replace(/[^.!?]*(dame un segundo|lo busco|busco|buscar)[^.!?]*[.!?]?/gi,'')
+      .trim();
+    if(confirmacion) agregarMensaje(confirmacion, 'bot');
+    const ajTurno = (c.flete_largo_aj!==undefined) ? c.flete_largo_aj : c.flete_corto_aj;
+    responderTarifaPorCodigo(obj.mensaje, ajTurno);
+    window._reintentoBusqueda = false;
+    return;
+  }
   if(!c.buscar_web && obj.mensaje && /dame un segundo|ahí (te )?lo busco|busco (de nuevo|nuevamente)/i.test(obj.mensaje)){
     if(!window._reintentoBusqueda){
       window._reintentoBusqueda = true;
@@ -4407,6 +4423,21 @@ function procesarRespuesta(texto){
     // los aplicamos AHORA, antes de salir a buscar. Si no, el return de abajo los descartaría
     // y la operación quedaría vacía cuando vuelva la búsqueda.
     aplicarCamposBasicos(c);
+    // TARIFA DE FLETE: nunca va a la web. Si la consulta no trae dos localidades
+    // (que sí necesitan Maps para sacar los km), la responde el código con la tabla CATAC.
+    const ajConsulta = (c.consultar_tarifa && typeof c.consultar_tarifa==='object' && c.consultar_tarifa.aj!==undefined)
+      ? parseFloat(c.consultar_tarifa.aj)
+      : (c.flete_largo_aj!==undefined ? c.flete_largo_aj : c.flete_corto_aj);
+    const esTarifaBuscada = esTemaTarifa(c.buscar_web) || !!c.consultar_tarifa;
+    if(esTarifaBuscada && !BUSQUEDA_WEB.parsearOrigenDestino(c.buscar_web)){
+      if(typeof calcular==='function') calcular();
+      const confirmacion = (obj.mensaje||'')
+        .replace(/[^.!?]*(dame un segundo|lo busco|busco|buscar)[^.!?]*[.!?]?/gi,'').trim();
+      if(confirmacion) agregarMensaje(confirmacion, 'bot');
+      responderTarifaPorCodigo(c.buscar_web, ajConsulta);
+      window._reintentoBusqueda = false;
+      return;
+    }
     agregarMensaje(obj.mensaje || 'Buscando el dato actualizado...', 'bot');
     const loading = document.createElement('div');
     loading.className='gem-loading';
@@ -4415,7 +4446,8 @@ function procesarRespuesta(texto){
     document.getElementById('gem-msgs').appendChild(loading);
     scrollMsgs();
     // Búsqueda en vuelo: mientras no vuelva, Liza tiene PROHIBIDO inventar el dato
-    window._busquedaEnCurso = { consulta: ''+c.buscar_web, desde: Date.now(), esConsultaTarifa: !!c.consultar_tarifa };
+    window._busquedaEnCurso = { consulta: ''+c.buscar_web, desde: Date.now(), esConsultaTarifa: esTarifaBuscada,
+      ajTarifa: (()=>{ const a = extraerAjustePct(c.buscar_web); return a!==null ? a : (Number(ajConsulta)||0); })() };
     window._reintentoBusqueda = false;
 
     // Si es una distancia, intentamos PRIMERO Google Maps (número exacto).
@@ -4434,14 +4466,14 @@ function procesarRespuesta(texto){
             // Si la búsqueda era una CONSULTA de tarifa (no carga), respondemos la
             // tarifa CATAC de esos km y NO ruteamos a Liza para cargar el flete.
             if(window._busquedaEnCurso && window._busquedaEnCurso.esConsultaTarifa){
+              const ajT = Number(window._busquedaEnCurso.ajTarifa)||0;
               window._busquedaEnCurso = null;
               document.getElementById('gem-loading-web')?.remove();
               const km = r.km;
               let m;
               if(km>=1 && km<=1000 && typeof CATAC!=='undefined'){
-                const tarifa = CATAC[km] || 0;
-                const fT = (typeof f==='function') ? f(tarifa,2) : Math.round(tarifa);
-                m = 'De ' + r.origen + ' a ' + r.destino + ' son unos ' + km + ' km por ruta. La tarifa CATAC (abril 2026) es $ ' + fT + '/tn. Es solo una consulta, no la cargué en la operación.';
+                m = 'De ' + r.origen + ' a ' + r.destino + ' son unos ' + km + ' km por ruta. '
+                  + textoTarifaCATAC(km, ajT) + ' Es solo una consulta, no la cargué en la operación.';
               } else {
                 m = 'De ' + r.origen + ' a ' + r.destino + ' son unos ' + km + ' km, pero la tabla CATAC va de 1 a 1000 km, así que ese tramo queda fuera de tabla.';
               }
@@ -5188,9 +5220,94 @@ function procesarRespuesta(texto){
     }
   }
 
+  // Si en este turno se cargaron km o un ajuste de flete, el código muestra la
+  // tarifa CATAC resultante (así Liza no tiene que "buscarla").
+  if(c.flete_corto_km!==undefined || c.flete_largo_km!==undefined
+     || c.flete_corto_aj!==undefined || c.flete_largo_aj!==undefined){
+    const tTar = textoTarifasCargadas();
+    if(tTar && msg.indexOf('tarifa CATAC')<0) msg += '\n\n' + tTar;
+  }
+
   agregarMensaje(msg,'bot');
   // Si el usuario pidió un PDF, lo generamos ahora (ya con los campos cargados y calculados)
 
+}
+
+// ════════════════════════════════════════════════════════════════
+// TARIFA CATAC — SIEMPRE LA CALCULA EL CÓDIGO (nunca se busca en la web)
+// ════════════════════════════════════════════════════════════════
+// ¿La consulta/mensaje habla de una tarifa de flete?
+function esTemaTarifa(txt){
+  return /tarifa|catac/i.test(txt||'');
+}
+// Extrae un ajuste % de un texto: "menos 15%", "-15%", "descuento del 15%" → -15;
+// "más 10%", "+10%", "recargo 10%" → +10. Devuelve null si no hay.
+function extraerAjustePct(txt){
+  const q = (txt||'').toLowerCase().replace(',', '.');
+  let m = q.match(/(menos|descuento(?:\s+de(?:l)?)?|-)\s*(\d+(?:\.\d+)?)\s*(%|por ?ciento)/);
+  if(m) return -parseFloat(m[2]);
+  m = q.match(/(\d+(?:\.\d+)?)\s*(%|por ?ciento)\s*de\s*(descuento|recargo)/);
+  if(m) return m[3]==='descuento' ? -parseFloat(m[1]) : parseFloat(m[1]);
+  m = q.match(/(m[aá]s|recargo(?:\s+de(?:l)?)?|\+)\s*(\d+(?:\.\d+)?)\s*(%|por ?ciento)/);
+  if(m) return parseFloat(m[2]);
+  return null;
+}
+// Extrae km sueltos de un texto ("350 km", "350 kilómetros"). 0 si no hay.
+function extraerKm(txt){
+  const m = (txt||'').toLowerCase().match(/(\d{1,4})\s*(km|kil[oó]metros?)\b/);
+  return m ? parseInt(m[1]) : 0;
+}
+// Texto con la tarifa CATAC de km + ajuste (o fuera de rango)
+function textoTarifaCATAC(km, aj){
+  if(!(km>=1 && km<=1000) || typeof CATAC==='undefined'){
+    return 'La tabla CATAC va de 1 a 1000 km. ' + (km ? km + ' km queda fuera de rango.' : '');
+  }
+  const base = CATAC[km] || 0;
+  const ajN = Number(aj)||0;
+  let m = 'Para ' + km + ' km, la tarifa CATAC (abril 2026) es $ ' + f(base*(1+ajN/100),2) + '/tn';
+  if(ajN!==0) m += ' con el ' + (ajN>0?'+':'') + f(ajN,ajN%1?1:0) + '% (base sin ajuste $ ' + f(base,2) + '/tn)';
+  return m + '.';
+}
+// Describe la tarifa de los fletes YA CARGADOS en la operación.
+// Devuelve '' si no hay ningún flete cargado.
+function textoTarifasCargadas(){
+  if(typeof fleteModos==='undefined' || typeof fleteIdMap==='undefined') return '';
+  const partes = [];
+  [['corto','Flete corto'],['salida', (typeof fleteLargoTipo!=='undefined' && fleteLargoTipo==='directo') ? 'Flete directo' : 'Flete largo']].forEach(([fl, lbl])=>{
+    const id = fleteIdMap[fl];
+    const aj = pv('g_'+id+'_aj')||0;
+    if(fleteModos[fl]==='km'){
+      const km = parseInt(pv('g_'+id+'_km'))||0;
+      if(km>0) partes.push(lbl + ': ' + textoTarifaCATAC(km, aj).replace(/^Para /,''));
+    } else {
+      const v = pv('g_'+id)||0;
+      if(v>0){
+        const cur = document.getElementById('g_'+id+'_curr')?.dataset.curr || 'ars';
+        let t = lbl + ': tarifa fija de ' + (cur==='usd' ? 'u$s '+f(v,2) : '$ '+f(v,2)) + '/tn';
+        if(aj!==0) t += '. Ojo: el ajuste del ' + f(aj,aj%1?1:0) + '% solo se aplica a la tarifa CATAC por km, no a una tarifa fija';
+        partes.push(t + '.');
+      }
+    }
+  });
+  return partes.join('\n');
+}
+// Responde por código una pregunta de tarifa (no carga nada nuevo).
+function responderTarifaPorCodigo(consulta, ajExtra){
+  const kmQ = extraerKm(consulta);
+  let aj = extraerAjustePct(consulta);
+  if(aj===null && ajExtra!==undefined && ajExtra!==null) aj = ajExtra;
+  let m;
+  if(kmQ>0){
+    m = textoTarifaCATAC(kmQ, aj||0) + ' Es solo una consulta, no la cargué en la operación.';
+  } else {
+    const cargadas = textoTarifasCargadas();
+    m = cargadas
+      ? 'La tarifa la calcula la app con la tabla CATAC:\n' + cargadas
+      : 'Para calcular la tarifa CATAC necesito los km del flete, o el origen y el destino. ¿Cuántos km son?';
+  }
+  agregarMensaje(m, 'bot');
+  gemHistorial.push({role:'user', parts:[{text:'(Sistema: la tarifa CATAC la calculó el código con la tabla interna y ya se la mostró al usuario. La tarifa NUNCA se busca en la web. NO repitas ni reinterpretes el número y NO digas que no podés calcular tarifas.)'}]});
+  gemHistorial.push({role:'model', parts:[{text: JSON.stringify({campos:{}, mensaje: m})}]});
 }
 
 function setInputVal(id,val){
