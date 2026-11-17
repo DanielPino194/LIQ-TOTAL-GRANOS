@@ -3931,35 +3931,42 @@ async function buscarTCDirectoAPI(ahoraParam){
   const esFeriado = d => FERIADOS_AR.includes(
     ('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)
   );
-  // Cierre de un día puntual (ArgentinaDatos, serie histórica)
-  const cierreDe = async (d, vigencia)=>{
-    const y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), di=('0'+d.getDate()).slice(-2);
+  const esHabil = d => !(d.getDay()===0 || d.getDay()===6 || esFeriado(d));
+  const habilAnterior = d => {
+    const x = new Date(d); x.setDate(x.getDate()-1);
+    while(!esHabil(x)) x.setDate(x.getDate()-1);
+    return x;
+  };
+  // Cierre del día hábil anterior (ArgentinaDatos).
+  // OJO: ArgentinaDatos guarda cada cierre con la fecha del día SIGUIENTE
+  // (verificado contra el BNA el 17/11/2026: el registro del 17/11 = divisa BNA
+  // del 16/11, y el del 16/11 = el del 13/11). Por eso se pide la fecha de HOY
+  // y se muestra la fecha REAL del cierre (día hábil anterior).
+  const cierreAnterior = async (hoy)=>{
+    const y=hoy.getFullYear(), m=('0'+(hoy.getMonth()+1)).slice(-2), di=('0'+hoy.getDate()).slice(-2);
     const j = await fj('https://api.argentinadatos.com/v1/cotizaciones/dolares/mayorista/'+y+'/'+m+'/'+di);
     const vv = valida(j && j.compra, j && j.venta);
-    return Object.assign(vv, { fecha: dd(d), fuente:'ArgentinaDatos', vigencia: vigencia||'cierre del día hábil anterior' });
+    return Object.assign(vv, { fecha: dd(habilAnterior(hoy)), fuente:'ArgentinaDatos', vigencia:'cierre del día hábil anterior' });
   };
-  // Valor vigente intradiario (DolarApi)
-  const actual = async ()=>{
+  // Valor vigente (DolarApi)
+  const actual = async (vigencia)=>{
     const j = await fj('https://dolarapi.com/v1/dolares/mayorista');
     const vv = valida(j && j.compra, j && j.venta);
     let ftxt = 'hoy';
     if(j.fechaActualizacion){ const f=new Date(j.fechaActualizacion); if(!isNaN(f)) ftxt = dd(f); }
-    return Object.assign(vv, { fecha: ftxt, fuente:'DolarApi', vigencia:'valor del día' });
+    return Object.assign(vv, { fecha: ftxt, fuente:'DolarApi', vigencia: vigencia||'valor del día' });
   };
   const ahora = ahoraParam || new Date();
+  // Fin de semana o feriado: no hay rueda, DolarApi muestra el último cierre.
+  if(!esHabil(ahora)) return actual('último cierre disponible');
   if(ahora.getHours() < 15){
-    // Antes de las 15: cierre del día hábil anterior (retrocede fines de semana
-    // y feriados sin dato, hasta 6 intentos).
-    let d = new Date(ahora); d.setDate(d.getDate()-1);
-    for(let i=0; i<6; i++){
-      while(d.getDay()===0 || d.getDay()===6 || esFeriado(d)) d.setDate(d.getDate()-1);
-      try{ return await cierreDe(d); }
-      catch(e){ d.setDate(d.getDate()-1); }
-    }
-    return actual(); // la serie no respondió: al menos el valor vigente, con su fecha visible
+    // Antes de las 15: cierre del día hábil anterior.
+    try{ return await cierreAnterior(ahora); }
+    catch(e){ return actual('valor intradiario, todavía no es el cierre'); }
   }
+  // Desde las 15: valor del día (DolarApi); si falla, el cierre anterior.
   try{ return await actual(); }
-  catch(e){ return cierreDe(new Date(ahora), 'cierre del día'); }
+  catch(e){ return cierreAnterior(ahora); }
 }
 
 const BUSQUEDA_WEB = {
